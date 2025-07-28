@@ -55,11 +55,8 @@ if user_input:
             df['Date'] = pd.to_datetime(df['Date'])
 
             # Senaste stängningspris
-            latest_close = df['Close'].tail(1)
-            if not latest_close.empty:
-                st.write(f"💰 Senaste stängningspris: **{latest_close.values[0]:.2f} SEK**")
-            else:
-                st.write("Ingen stängningsdata tillgänglig.")
+            latest_close = df['Close'].iloc[-1]  # ✅ FIX: Nu är det ett tal, inte en array
+            st.write(f"💰 Senaste stängningspris: **{latest_close:.2f} SEK**")
 
             # SMA (20-dagars)
             df['SMA20'] = df['Close'].rolling(window=20).mean()
@@ -68,7 +65,7 @@ if user_input:
             min_price = df["Close"].min()
             max_price = df["Close"].max()
 
-            chart = alt.Chart(df).mark_line().encode(
+            chart = alt.Chart(df).mark_line(color="skyblue").encode(
                 x=alt.X("Date:T", title="Datum"),
                 y=alt.Y("Close:Q", title="Stängningspris (SEK)",
                         scale=alt.Scale(domain=[min_price * 0.95, max_price * 1.05])),
