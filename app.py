@@ -44,7 +44,8 @@ else:
 
     st.subheader(f"{selected_stock} ({ticker})")
     st.write(f"💰 Senaste stängningspris: **{latest_close:.2f} SEK**")
-    st.write(f"📈 RSI: 55**{latest_rsi:.2f}**")
+    st.write(f"📈 RSI:
+    **{latest_rsi:.2f}**")
     st.line_chart(df['Close'])
 
     st.write("📋 Öppning & Stängning – senaste 3 månaderna:")
