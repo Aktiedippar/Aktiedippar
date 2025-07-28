@@ -45,33 +45,35 @@ stock_list = [name_to_ticker[name] for name in input_list if name in name_to_tic
 if not stock_list:
     st.warning("⚠️ Inga giltiga bolagsnamn hittades. Kontrollera stavningen.")
 else:
-    for stock in stock_list:
-        df = get_data(stock)
-        if df.empty:
-            st.write(f"⚠️ Ingen data för {stock}.")
-            continue
+for stock in stock_list:
+    df = get_data(stock)
+    if df.empty:
+        st.write(f"⚠️ Ingen data för {stock}.")
+        continue
 
-        # Ta bort rader där RSI eller Close saknas
-        df = df.dropna(subset=['RSI', 'Close'])
+    if 'RSI' not in df.columns or 'Close' not in df.columns:
+        st.write(f"⚠️ Kolumner saknas i {stock} – hoppar över.")
+        continue
 
-        if df.empty:
-            st.write(f"⚠️ Ingen tillräcklig data för {stock} efter filtrering.")
-            continue
+    df = df.dropna(subset=['RSI', 'Close'])
 
-        try:
-            latest_rsi = float(df['RSI'].iloc[-1])
-            latest_close = float(df['Close'].iloc[-1])
-        except Exception:
-            st.write(f"⚠️ Fel vid hämtning av senaste värden för {stock}.")
-            continue
+    if df.empty:
+        st.write(f"⚠️ Ingen tillräcklig data för {stock} efter filtrering.")
+        continue
 
-        # Visa analys
-        st.subheader(f"📊 {stock}")
-        st.write(f"💰 Senaste pris: **{latest_close:.2f} USD**")
+    try:
+        latest_rsi = float(df['RSI'].iloc[-1])
+        latest_close = float(df['Close'].iloc[-1])
+    except Exception:
+        st.write(f"⚠️ Fel vid hämtning av senaste värden för {stock}.")
+        continue
 
-        if latest_rsi < 50:
-            st.write(f"📉 RSI: **{latest_rsi:.2f}** 🟠 *(Lågt RSI – kan vara köpläge)*")
-        else:
-            st.write(f"📈 RSI: **{latest_rsi:.2f}**")
+    st.subheader(f"📊 {stock}")
+    st.write(f"💰 Senaste pris: **{latest_close:.2f} USD**")
 
-        st.line_chart(df['Close'])
+    if latest_rsi < 50:
+        st.write(f"📉 RSI: **{latest_rsi:.2f}** 🟠 *(Lågt RSI – kan vara köpläge)*")
+    else:
+        st.write(f"📈 RSI: **{latest_rsi:.2f}**")
+
+    st.line_chart(df['Close'])
