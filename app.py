@@ -33,15 +33,18 @@ st.title("📉 Aktier som dippar – möjliga köplägen")
 selected_name = st.selectbox("Välj ett bolag:", list(stock_names.keys()))
 ticker = stock_names[selected_name]
 
-# Hämta och visa data
+# Hämta data
 df = get_data(ticker)
 
-if df.empty:
-    st.error(f"Ingen data hittades för {selected_name}.")
-else:
-    st.subheader(f"{selected_name}             ({ticker})")
-    st.write(f"💰 Senaste     stängningspris: **{df['Close'].iloc[-1]:.2f}    SEK**")
+# Om data finns, visa analys
+if not df.empty:
+    st.subheader(f"{selected_name} ({ticker})")
+    st.write(f"💰 Senaste stängningspris: **{df['Close'].iloc[-1]:.2f} SEK**")
     st.write(f"📈 RSI: **{df['RSI'].iloc[-1]:.2f}**")
     st.line_chart(df['Close'])
-    st.write("📋 Öppnings- och     stängningspriser:")
+    st.write("📋 Öppnings- och stängningspriser:")
     st.dataframe(df[['Open', 'Close']].sort_index(ascending=False).round(2))
+
+# Om data saknas, visa felmeddelande
+if df.empty:
+    st.error(f"Ingen data hittades för {selected_name}.")
