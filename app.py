@@ -24,29 +24,49 @@ def get_data(ticker):
     df['RSI'] = compute_rsi(df['Close'])
     return df.dropna()
 
-# --- NAMN -> TICKER-MAPPNING ---
+# --- SNABB-NAMN -> TICKER MAPPNING ---
 stock_names = {
     "saab": "SAAB-B.ST",
     "evo": "EVO.ST",
-    "evolution": "EVO.ST"
+    "evolution": "EVO.ST",
+    "betsson": "BETS-B.ST",
+    "kindred": "KIND-SDB.ST",
+    "volvo": "VOLV-B.ST",
+    "tesla": "TSLA",
+    "apple": "AAPL"
 }
 
 # --- TITEL ---
 st.title("📉 Aktier som dippar – möjliga köplägen")
 
 # --- INPUT ---
-user_input = st.text_input("Skriv ett företagsnamn (t.ex. 'saab', 'evo')").lower().strip()
+user_input = st.text_input("Skriv ett företagsnamn eller ticker (t.ex. 'saab', 'tesla', 'AAPL')").strip().lower()
+
+def resolve_ticker(user_input):
+    # Först: försök via egen mapping
+    if user_input in stock_names:
+        return stock_names[user_input]
+
+    # Nästa: testa om det är en riktig ticker (ex: "TSLA", "AAPL", "ERIC-B.ST")
+    try:
+        test_df = yf.download(user_input.upper(), period='1d')
+        if not test_df.empty:
+            return user_input.upper()
+    except:
+        pass
+
+    return None
 
 if user_input:
-    ticker = stock_names.get(user_input)
+    ticker = resolve_ticker(user_input)
 
-    if not ticker:
-        st.error("❌ Företaget kunde inte hittas. Prova t.ex. 'saab' eller 'evo'.")
+    if ticker is None:
+        st.error("❌ Kunde inte hitta någon giltig ticker för det du skrev.")
     else:
         df = get_data(ticker)
 
         if df.empty:
-            st.error(f"Ingen data hittades för {user_input.upper()} ({ticker}).")
+            st.error(f"⚠️ Ingen data hittades för {user_input.upper()} ({ticker}).")
         else:
             st.subheader(f"{user_input.capitalize()} ({ticker})")
 
@@ -56,7 +76,6 @@ if user_input:
 
             st.write(f"💰 Senaste stängningspris: **{latest_close:.2f} SEK**")
 
-            # RSI-indikator med färg
             if latest_rsi < 30:
                 st.success(f"📉 RSI: **{latest_rsi:.2f}** – Översåld (möjligt köpläge)")
             elif latest_rsi > 70:
@@ -80,4 +99,4 @@ if user_input:
             st.write("📋 Öppnings- och stängningspriser:")
             st.dataframe(df[['Open', 'Close']].sort_index(ascending=False).round(2))
 else:
-    st.info("🔍 Ange ett företagsnamn för att se analysen.")
+    st.info("🔍 Ange ett företagsnamn eller ticker för att se analysen.")
