@@ -19,42 +19,38 @@ def compute_rsi(series, period=14):
     rsi = 100 - (100 / (1 + rs))
     return rsi
 
-# --- DATAHÄMTNING ---
-def get_data(ticker):
-    try:
-        df = yf.download(ticker, period='3mo', interval='1d', auto_adjust=False)
-        if df.empty or 'Close' not in df.columns:
-            return pd.DataFrame()
-        df['RSI'] = compute_rsi(df['Close'])
-        return df.dropna()
-    except Exception:
+# --- DATAHÄMTNING MED PROGNOS ---
+def get_data_with_forecast(ticker):
+    df = yf.download(ticker, period='3mo', interval='1d', auto_adjust=False)
+
+    if df.empty or 'Close' not in df.columns:
         return pd.DataFrame()
 
-# --- Prognosfunktion ---
-def add_forecast(df):
-    lookback_days = 14
-    if len(df) < lookback_days:
-        df['Forecast'] = False
+    df['RSI'] = compute_rsi(df['Close'])
+    df = df.dropna()
+    df['Forecast'] = False  # Markera som historiska värden
+
+    # Prognos på 7 dagar med linjär regression
+    try:
+        df_model = df.tail(14).copy()
+        df_model['Days'] = (df_model.index - df_model.index.min()).days
+        X = df_model[['Days']]
+        y = df_model['Close']
+        model = LinearRegression()
+        model.fit(X, y)
+
+        future_dates = [df.index[-1] + timedelta(days=i) for i in range(1, 8)]
+        future_days = [(d - df.index.min()).days for d in future_dates]
+        future_prices = model.predict(np.array(future_days).reshape(-1, 1))
+
+        forecast_df = pd.DataFrame({'Close': future_prices.ravel()}, index=future_dates)
+        forecast_df['Forecast'] = True
+
+        df_combined = pd.concat([df, forecast_df])
+        return df_combined
+
+    except Exception as e:
         return df
-
-    train_df = df.tail(lookback_days).copy()
-    train_df['Days'] = (train_df.index - train_df.index.min()).days
-    X_train = train_df[['Days']]
-    y_train = train_df['Close']
-
-    model = LinearRegression()
-    model.fit(X_train, y_train)
-
-    last_date = df.index[-1]
-    future_dates = [last_date + timedelta(days=i) for i in range(1, 8)]
-    future_days = [(d - train_df.index.min()).days for d in future_dates]
-    future_prices = model.predict(np.array(future_days).reshape(-1, 1))
-
-    forecast_df = pd.DataFrame({'Close': future_prices.ravel()}, index=future_dates)
-    forecast_df['Forecast'] = True
-
-    df['Forecast'] = False
-    return pd.concat([df, forecast_df])
 
 # --- NAMN -> TICKER MAPPNING ---
 stock_names = {
@@ -68,11 +64,8 @@ stock_names = {
     "apple": "AAPL"
 }
 
-# --- CENTRERAD RUBRIK ---
-st.markdown(
-    "<h1 style='text-align: center;'>📉 Aktieanalys 📈</h1>",
-    unsafe_allow_html=True
-)
+# --- RUBRIK ---
+st.markdown("<h1 style='text-align: center;'>📉 Aktieanalys 📈</h1>", unsafe_allow_html=True)
 
 # --- ANVÄNDARINPUT ---
 user_input = st.text_input("Skriv ett företagsnamn eller ticker (t.ex. 'saab', 'tesla', 'AAPL')").strip().lower()
@@ -94,46 +87,30 @@ if user_input:
     if ticker is None:
         st.error("❌ Kunde inte hitta någon giltig ticker för det du skrev.")
     else:
-        df = get_data(ticker)
+        df = get_data_with_forecast(ticker)
 
         if df.empty:
             st.error(f"⚠️ Ingen data hittades för {user_input.upper()} ({ticker}).")
         else:
             st.subheader(f"{user_input.capitalize()} ({ticker})")
 
-            # Valuta
-            currency = "SEK" if ticker.endswith(".ST") else "USD"
+            currency = "SEK" if ".ST" in ticker else "USD"
 
-            # Hämta senaste värden
-            try:
-                latest_close = float(df['Close'].iloc[-1])
-            except Exception:
-                latest_close = None
+            # Hämta senaste stängningspris
+            latest_close = df[df['Forecast'] == False]['Close'].iloc[-1]
+            latest_rsi = df[df['Forecast'] == False]['RSI'].iloc[-1]
 
-            try:
-                latest_rsi = float(df['RSI'].iloc[-1])
-            except Exception:
-                latest_rsi = None
+            st.write(f"💰 Senaste stängningspris: **{latest_close:.2f} {currency}**")
 
-            if latest_close is not None:
-                st.write(f"💰 Senaste stängningspris: **{latest_close:.2f} {currency}**")
+            # Visa RSI
+            if latest_rsi < 30:
+                st.success(f"📉 RSI: **{latest_rsi:.2f}** – Översåld (möjligt köpläge)")
+            elif latest_rsi > 70:
+                st.warning(f"📈 RSI: **{latest_rsi:.2f}** – Överköpt (var försiktig)")
             else:
-                st.warning("❌ Kunde inte hämta stängningspris.")
+                st.write(f"📈 RSI: **{latest_rsi:.2f}**")
 
-            if latest_rsi is not None:
-                if latest_rsi < 30:
-                    st.success(f"📉 RSI: **{latest_rsi:.2f}** – Översåld (möjligt köpläge)")
-                elif latest_rsi > 70:
-                    st.warning(f"📈 RSI: **{latest_rsi:.2f}** – Överköpt (var försiktig)")
-                else:
-                    st.write(f"📈 RSI: **{latest_rsi:.2f}**")
-            else:
-                st.warning("❌ Kunde inte hämta RSI-värde.")
-
-            # Prognos
-            df = add_forecast(df)
-
-            # Prisgraf: blå = verkligt, rosa = prognos
+            # --- GRAF ---
             base = alt.Chart(df.reset_index())
 
             actual = base.transform_filter(
@@ -155,13 +132,14 @@ if user_input:
             st.write("📊 Prisgraf med 7-dagars prognos:")
             st.altair_chart((actual + forecast).properties(width=700, height=400).interactive())
 
-            # Tabell
-            st.write("📋 Öppnings- och stängningspriser:")
-            st.dataframe(df[['Open', 'Close']].dropna().sort_index(ascending=False).round(2))
+            # --- TABELL ---
+            st.write("📋 Öppnings- och stängningspriser (historiska):")
+            st.dataframe(
+                df[df['Forecast'] == False][['Open', 'Close']]
+                .dropna()
+                .sort_index(ascending=False)
+                .round(2)
+            )
 
-# Startvy
-else:
-    st.info("🔍 Ange ett företagsnamn eller ticker för att se analysen.")
-
-# --- Signatur ---
+# --- SIGNATUR ---
 st.markdown("<p style='text-align: center; color: gray; font-size: 13px;'>© 2025 av Julius</p>", unsafe_allow_html=True)
