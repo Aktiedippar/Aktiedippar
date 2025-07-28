@@ -13,13 +13,13 @@ def compute_rsi(series, period=14):
     rsi = 100 - (100 / (1 + rs))
     return rsi
 
-# Hämta data
+# Hämtar data
 def get_data(ticker):
     df = yf.download(ticker, period='3mo', interval='1d', auto_adjust=False)
-    if df.empty or 'Close' not in df.columns or 'Open' not in df.columns:
+    if df.empty:
         return pd.DataFrame()
     df['RSI'] = compute_rsi(df['Close'])
-    return df.dropna(subset=['Close', 'Open', 'RSI'])
+    return df.dropna()
 
 # Mappar företagsnamn till rätt ticker
 stock_names = {
@@ -38,12 +38,10 @@ df = get_data(ticker)
 
 if df.empty:
     st.error(f"Ingen data hittades för {selected_name}.")
-else:
+else:    
     st.subheader(f"{selected_name} ({ticker})")
     st.write(f"💰 Senaste stängningspris: **{df['Close'].iloc[-1]:.2f} SEK**")
     st.write(f"📈 RSI: **{df['RSI'].iloc[-1]:.2f}**")
-    
     st.line_chart(df['Close'])
-
-    st.write("📋 Öppnings- och stängningspriser senaste 3 månaderna:")
-    st.dataframe(df[['Open', 'Close']].round(2).sort_index(ascending=False))
+    st.write("📋 Öppnings- och stängningspriser:")
+    st.dataframe(df[['Open', 'Close']].sort_index(ascending=False).round(2))
