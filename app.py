@@ -3,6 +3,26 @@ import yfinance as yf
 import pandas as pd
 import altair as alt
 
+# --- SVART BAKGRUND & LJUS TEXT ---
+st.markdown("""
+    <style>
+    body {
+        background-color: #000000;
+        color: white;
+    }
+    .stApp {
+        background-color: #000000;
+        color: white;
+    }
+    h1, h2, h3, h4, h5, h6, p, div, span {
+        color: white !important;
+    }
+    .stDataFrame {
+        background-color: #1a1a1a;
+    }
+    </style>
+""", unsafe_allow_html=True)
+
 st.set_page_config(page_title="Aktier som dippar", page_icon="📉", layout="centered")
 
 # --- RSI-BERÄKNING ---
