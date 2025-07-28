@@ -2,119 +2,124 @@ import streamlit as st
 import yfinance as yf
 import pandas as pd
 import altair as alt
+from datetime import date, timedelta
 
-st.set_page_config(page_title="Aktier som dippar", page_icon="📉", layout="centered")
+st.set_page_config(page_title="Aktiedippar", layout="wide")
 
-# --- RSI-BERÄKNING ---
-def compute_rsi(series, period=14):
-    delta = series.diff()
-    gain = delta.where(delta > 0, 0.0)
-    loss = -delta.where(delta < 0, 0.0)
-    avg_gain = gain.rolling(window=period).mean()
-    avg_loss = loss.rolling(window=period).mean()
-    rs = avg_gain / avg_loss
-    rsi = 100 - (100 / (1 + rs))
-    return rsi
+# --- CSS-styling för Avanza-liknande känsla ---
+st.markdown("""
+    <style>
+    body {
+        background-color: #f4f6f9;
+    }
+    .title {
+        font-size: 40px;
+        font-weight: bold;
+        text-align: center;
+        margin-bottom: 20px;
+        color: #14375A;
+    }
+    .footer {
+        font-size: 14px;
+        color: gray;
+        text-align: center;
+        margin-top: 50px;
+    }
+    </style>
+""", unsafe_allow_html=True)
 
-# --- DATAHÄMTNING ---
-def get_data(ticker):
-    try:
-        df = yf.download(ticker, period='3mo', interval='1d', auto_adjust=False)
-        if df.empty or 'Close' not in df.columns:
-            return pd.DataFrame()
-        df['RSI'] = compute_rsi(df['Close'])
-        return df.dropna()
-    except Exception:
-        return pd.DataFrame()
+st.markdown('<div class="title">📈 Aktiedippar</div>', unsafe_allow_html=True)
 
-# --- NAMN -> TICKER MAPPNING ---
-stock_names = {
-    "saab": "SAAB-B.ST",
-    "evo": "EVO.ST",
-    "evolution": "EVO.ST",
-    "betsson": "BETS-B.ST",
-    "kindred": "KIND-SDB.ST",
-    "volvo": "VOLV-B.ST",
-    "tesla": "TSLA",
-    "apple": "AAPL"
-}
+# --- Funktion för att hitta ticker från företagsnamn ---
+def get_ticker(name):
+    name = name.lower()
+    mapping = {
+        "saab": "SAAB-B.ST",
+        "volvo": "VOLV-B.ST",
+        "tesla": "TSLA",
+        "apple": "AAPL",
+        "evolution": "EVO.ST",
+        "hm": "HM-B.ST",
+        "h&m": "HM-B.ST"
+    }
+    return mapping.get(name, name.upper())
 
-# --- RUBRIK ---
-st.markdown(
-    "<h1 style='text-align: center;'>📉 Aktieanalys 📈</h1>",
-    unsafe_allow_html=True
-)
+# --- Datuminställningar ---
+end_date = date.today()
+start_date = end_date - timedelta(days=90)
 
-# --- ANVÄNDARINPUT ---
-user_input = st.text_input("Skriv ett företagsnamn eller ticker (t.ex. 'saab', 'tesla', 'AAPL')").strip().lower()
-
-def resolve_ticker(user_input):
-    if user_input in stock_names:
-        return stock_names[user_input]
-    try:
-        test_df = yf.download(user_input.upper(), period='1d')
-        if not test_df.empty:
-            return user_input.upper()
-    except:
-        pass
-    return None
+# --- Sökfält ---
+user_input = st.text_input("Sök aktie (t.ex. 'saab', 'tesla', 'apple'):")
 
 if user_input:
-    ticker = resolve_ticker(user_input)
+    ticker = get_ticker(user_input)
+    df = yf.download(ticker, start=start_date, end=end_date)
 
-    if ticker is None:
-        st.error("❌ Kunde inte hitta någon giltig ticker för det du skrev.")
+    if df.empty:
+        st.error(f"Ingen data hittades för {user_input} ({ticker}).")
     else:
-        df = get_data(ticker)
+        df.reset_index(inplace=True)
 
-        if df.empty:
-            st.error(f"⚠️ Ingen data hittades för {user_input.upper()} ({ticker}).")
-        else:
-            st.subheader(f"{user_input.capitalize()} ({ticker})")
+        # --- RSI (Relative Strength Index) ---
+        delta = df["Close"].diff()
+        gain = delta.where(delta > 0, 0)
+        loss = -delta.where(delta < 0, 0)
+        avg_gain = gain.rolling(window=14).mean()
+        avg_loss = loss.rolling(window=14).mean()
+        rs = avg_gain / avg_loss
+        df["RSI"] = 100 - (100 / (1 + rs))
 
-            # Senaste värden
-            latest_close = df['Close'].iloc[-1] if 'Close' in df.columns else None
-            latest_rsi = df['RSI'].iloc[-1] if 'RSI' in df.columns else None
+        # --- SMA 20 (Simple Moving Average) ---
+        df["SMA 20"] = df["Close"].rolling(window=20).mean()
 
-            if latest_close is not None:
-                st.write(f"💰 Senaste stängningspris: **{latest_close:.2f} SEK**")
-            else:
-                st.warning("❌ Kunde inte hämta stängningspris.")
+        # --- Hämta senaste stängningspris ---
+        if not df["Close"].empty:
+            latest_close = df["Close"].iloc[-1]
+            st.write(f"💰 Senaste stängningspris: **{latest_close:.2f} SEK**")
 
-            if latest_rsi is not None:
-                if latest_rsi < 30:
-                    st.success(f"📉 RSI: **{latest_rsi:.2f}** – Översåld (möjligt köpläge)")
-                elif latest_rsi > 70:
-                    st.warning(f"📈 RSI: **{latest_rsi:.2f}** – Överköpt (var försiktig)")
-                else:
-                    st.write(f"📈 RSI: **{latest_rsi:.2f}**")
-            else:
-                st.warning("❌ Kunde inte hämta RSI-värde.")
+        # --- Beräkna dynamiskt y-intervall för bättre graf ---
+        min_price = df["Close"].min()
+        max_price = df["Close"].max()
+        y_scale = alt.Scale(domain=[min_price * 0.95, max_price * 1.05])
 
-            # --- PRISGRAF ---
-            st.write("📊 Prisgraf:")
+        # --- Prisgraf med SMA 20 ---
+        base = alt.Chart(df).encode(
+            x="Date:T",
+            y=alt.Y("Close:Q", title="Stängningspris (SEK)", scale=y_scale)
+        )
 
-            min_price = df['Close'].min()
-            max_price = df['Close'].max()
+        line_close = base.mark_line(color="#1f77b4").encode(
+            tooltip=["Date:T", "Close:Q"]
+        )
 
-            price_chart = alt.Chart(df.reset_index()).mark_line(color='deepskyblue').encode(
-                x=alt.X("Date:T", title="Datum"),
-                y=alt.Y("Close:Q", title="Stängningspris (SEK)",
-                        scale=alt.Scale(domain=[min_price * 0.95, max_price * 1.05])),
-                tooltip=['Date:T', 'Close:Q', 'RSI:Q']
-            ).properties(
-                width=700,
-                height=400
-            ).interactive()
+        sma_line = base.mark_line(color="orange").encode(
+            y="SMA 20:Q",
+            tooltip=["Date:T", "SMA 20:Q"]
+        )
 
-            st.altair_chart(price_chart)
+        st.altair_chart((line_close + sma_line).properties(title="📉 Prisgraf med SMA 20"), use_container_width=True)
 
-            # --- TABELL ---
-            st.write("📋 Öppnings- och stängningspriser:")
-            if 'Open' in df.columns and 'Close' in df.columns:
-                st.dataframe(df[['Open', 'Close']].dropna().sort_index(ascending=False).round(2))
-            else:
-                st.warning("⚠️ Kunde inte visa tabell eftersom Open eller Close saknas.")
-else:
-    st.info("🔍 Ange ett företagsnamn eller ticker för att se analysen.")
-    st.markdown("<p style='text-align: center; color: gray; font-size: 13px;'>© 2025 av Julius</p>", unsafe_allow_html=True)
+        # --- Volymgraf ---
+        volume_chart = alt.Chart(df).mark_bar(color="#7f7f7f").encode(
+            x="Date:T",
+            y="Volume:Q",
+            tooltip=["Date:T", "Volume"]
+        ).properties(height=100, title="📊 Volym")
+
+        st.altair_chart(volume_chart, use_container_width=True)
+
+        # --- RSI-graf ---
+        rsi_chart = alt.Chart(df).mark_line(color="purple").encode(
+            x="Date:T",
+            y=alt.Y("RSI:Q", scale=alt.Scale(domain=[0, 100])),
+            tooltip=["Date:T", "RSI:Q"]
+        ).properties(title="📈 RSI (14 dagar)")
+
+        st.altair_chart(rsi_chart, use_container_width=True)
+
+        # --- Tabell med öppnings- och stängningspriser ---
+        st.subheader("📅 Öppnings- och stängningspriser")
+        st.dataframe(df[["Date", "Open", "Close"]].dropna().sort_values("Date", ascending=False).round(2))
+
+# --- Diskret signatur ---
+st.markdown('<div class="footer">Byggd med ❤️ av Julius</div>', unsafe_allow_html=True)
