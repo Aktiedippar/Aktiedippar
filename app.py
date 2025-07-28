@@ -51,13 +51,18 @@ else:
             st.write(f"⚠️ Ingen data för {stock}.")
             continue
 
-        latest_rsi = df['RSI'].iloc[-1]
-        latest_close = df['Close'].iloc[-1]
+# Kontrollera att vi har giltiga värden
+if not df['Close'].empty and not df['RSI'].isna().all():
+    latest_rsi = df['RSI'].dropna().iloc[-1]
+    latest_close = df['Close'].iloc[-1]
 
-        st.subheader(f"📊 {stock}")
-        st.write(f"💰 Senaste pris: **{latest_close:.2f} USD**")
-        if latest_rsi < 50:
-            st.write(f"📉 RSI: **{latest_rsi:.2f}** 🟠 *(Lågt RSI)*")
-        else:
-            st.write(f"📈 RSI: **{latest_rsi:.2f}**")
-        st.line_chart(df['Close'])
+    st.subheader(f"📊 {stock}")
+    st.write(f"💰 Senaste pris: **{latest_close:.2f} USD**")
+    if latest_rsi < 50:
+        st.write(f"📉 RSI: **{latest_rsi:.2f}** 🟠 *(Lågt RSI)*")
+    else:
+        st.write(f"📈 RSI: **{latest_rsi:.2f}**")
+    st.line_chart(df['Close'])
+else:
+    st.write(f"⚠️ Otillräcklig data för att visa {stock}.")
+    
