@@ -23,8 +23,6 @@ def get_data(ticker):
         if df.empty or 'Close' not in df.columns:
             return pd.DataFrame()
         df['RSI'] = compute_rsi(df['Close'])
-        df['SMA20'] = df['Close'].rolling(window=20).mean()
-        df['SMA50'] = df['Close'].rolling(window=50).mean()
         return df.dropna()
     except Exception:
         return pd.DataFrame()
@@ -41,9 +39,9 @@ stock_names = {
     "apple": "AAPL"
 }
 
-# --- RUBRIK ---
+# --- CENTRERAD RUBRIK ---
 st.markdown(
-    "<h1 style='text-align: center;'>📉 Aktieanalys 📈</h1>",
+    "<h1 style='text-align: center; color: #003366;'>📉 Aktieanalys 📈</h1>",
     unsafe_allow_html=True
 )
 
@@ -74,7 +72,7 @@ if user_input:
         else:
             st.subheader(f"{user_input.capitalize()} ({ticker})")
 
-            # Senaste värden
+            # Hämta senaste värden
             try:
                 latest_close = float(df['Close'].iloc[-1])
             except Exception:
@@ -85,11 +83,13 @@ if user_input:
             except Exception:
                 latest_rsi = None
 
+            # Visa stängningspris
             if latest_close is not None:
-                st.markdown(f"<p>💰 Stängningspris: <b>{latest_close:.2f} SEK</b></p>", unsafe_allow_html=True)
+                st.markdown(f"<p style='font-size:18px;'>💰 Stängningspris: <b>{latest_close:.2f} SEK</b></p>", unsafe_allow_html=True)
             else:
                 st.warning("❌ Kunde inte hämta stängningspris.")
 
+            # Visa RSI
             if latest_rsi is not None:
                 if latest_rsi < 30:
                     st.success(f"📉 RSI: **{latest_rsi:.2f}** – Översåld (möjligt köpläge)")
@@ -100,38 +100,28 @@ if user_input:
             else:
                 st.warning("❌ Kunde inte hämta RSI-värde.")
 
-            # --- GRAF ---
+            # Prisgraf
             st.write("📊 Prisgraf:")
-
             min_price = df["Close"].min()
             max_price = df["Close"].max()
 
-            base = alt.Chart(df.reset_index()).encode(x='Date:T')
+            chart = alt.Chart(df.reset_index()).mark_line(color="#0066cc").encode(
+                x=alt.X("Date:T", title="Datum"),
+                y=alt.Y("Close:Q", title="Stängningspris (SEK)", scale=alt.Scale(domain=[min_price * 0.95, max_price * 1.05])),
+                tooltip=['Date:T', 'Close:Q', 'RSI:Q']
+            ).properties(
+                width=700,
+                height=400
+            ).interactive()
 
-            close_line = base.mark_line(color='blue').encode(
-                y=alt.Y("Close:Q", title="Stängningspris (SEK)",
-                        scale=alt.Scale(domain=[min_price * 0.95, max_price * 1.05])),
-                tooltip=['Date:T', 'Close:Q']
-            )
-
-            sma20_line = base.mark_line(color='orange').encode(
-                y='SMA20:Q'
-            )
-
-            sma50_line = base.mark_line(color='green').encode(
-                y='SMA50:Q'
-            )
-
-            chart = (close_line + sma20_line + sma50_line).properties(width=700, height=400).interactive()
             st.altair_chart(chart)
 
             # Tabell
             st.write("📋 Öppnings- och stängningspriser:")
-            if 'Open' in df.columns and 'Close' in df.columns:
-                st.dataframe(df[['Open', 'Close']].dropna().sort_index(ascending=False).round(2))
-            else:
-                st.warning("Kunde inte visa tabellen – saknar kolumner.")
+            st.dataframe(df[['Open', 'Close']].sort_index(ascending=False).round(2))
 
 else:
     st.info("🔍 Ange ett företagsnamn eller ticker för att se analysen.")
-    st.markdown("<p style='text-align: center; color: gray; font-size: 13px;'>© 2025 av Julius</p>", unsafe_allow_html=True)
+
+# --- Diskret signatur ---
+st.markdown("<p style='text-align: center; color: gray; font-size: 12px;'>© 2025 av Julius</p>", unsafe_allow_html=True)
