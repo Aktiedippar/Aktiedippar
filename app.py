@@ -30,7 +30,7 @@ def get_data(ticker):
     except Exception:
         return pd.DataFrame()
 
-# --- ENKEL 7-DAGARS PROGNOS ---
+# --- Prognosfunktion ---
 def add_forecast(df):
     lookback_days = 14
     if len(df) < lookback_days:
@@ -50,7 +50,7 @@ def add_forecast(df):
     future_days = [(d - train_df.index.min()).days for d in future_dates]
     future_prices = model.predict(np.array(future_days).reshape(-1, 1))
 
-    forecast_df = pd.DataFrame({'Close': future_prices}, index=future_dates)
+    forecast_df = pd.DataFrame({'Close': future_prices.ravel()}, index=future_dates)
     forecast_df['Forecast'] = True
 
     df['Forecast'] = False
@@ -101,7 +101,7 @@ if user_input:
         else:
             st.subheader(f"{user_input.capitalize()} ({ticker})")
 
-            # Valutadetektion
+            # Valuta
             currency = "SEK" if ticker.endswith(".ST") else "USD"
 
             # Hämta senaste värden
@@ -115,13 +115,11 @@ if user_input:
             except Exception:
                 latest_rsi = None
 
-            # Visa stängningspris
             if latest_close is not None:
                 st.write(f"💰 Senaste stängningspris: **{latest_close:.2f} {currency}**")
             else:
                 st.warning("❌ Kunde inte hämta stängningspris.")
 
-            # Visa RSI
             if latest_rsi is not None:
                 if latest_rsi < 30:
                     st.success(f"📉 RSI: **{latest_rsi:.2f}** – Översåld (möjligt köpläge)")
@@ -132,13 +130,13 @@ if user_input:
             else:
                 st.warning("❌ Kunde inte hämta RSI-värde.")
 
-            # Lägg till prognos
+            # Prognos
             df = add_forecast(df)
 
-            # Prisgraf med prognos
+            # Prisgraf: blå = verkligt, rosa = prognos
             base = alt.Chart(df.reset_index())
 
-            line_actual = base.transform_filter(
+            actual = base.transform_filter(
                 alt.datum.Forecast == False
             ).mark_line(color='blue').encode(
                 x='Date:T',
@@ -146,7 +144,7 @@ if user_input:
                 tooltip=['Date:T', 'Close:Q']
             )
 
-            line_forecast = base.transform_filter(
+            forecast = base.transform_filter(
                 alt.datum.Forecast == True
             ).mark_line(color='pink', strokeDash=[4, 4]).encode(
                 x='Date:T',
@@ -154,12 +152,16 @@ if user_input:
                 tooltip=['Date:T', 'Close:Q']
             )
 
-            st.write("📊 Prisgraf med prognos:")
-            st.altair_chart((line_actual + line_forecast).properties(width=700, height=400).interactive())
+            st.write("📊 Prisgraf med 7-dagars prognos:")
+            st.altair_chart((actual + forecast).properties(width=700, height=400).interactive())
 
             # Tabell
             st.write("📋 Öppnings- och stängningspriser:")
-            st.dataframe(df[df['Forecast'] == False][['Open', 'Close']].sort_index(ascending=False).round(2))
+            st.dataframe(df[['Open', 'Close']].dropna().sort_index(ascending=False).round(2))
 
-# --- DISKRET SIGNATUR ---
+# Startvy
+else:
+    st.info("🔍 Ange ett företagsnamn eller ticker för att se analysen.")
+
+# --- Signatur ---
 st.markdown("<p style='text-align: center; color: gray; font-size: 13px;'>© 2025 av Julius</p>", unsafe_allow_html=True)
