@@ -83,9 +83,15 @@ if user_input:
             except Exception:
                 latest_rsi = None
 
+            # --- Visa rätt valuta beroende på ticker ---
+            if ticker.endswith(".ST"):
+                currency = "SEK"
+            else:
+                currency = "USD"
+
             # Visa stängningspris
             if latest_close is not None:
-                st.write(f"💰 Senaste stängningspris: **{latest_close:.2f} SEK**")
+                st.write(f"💰 Senaste stängningspris: **{latest_close:.2f} {currency}**")
             else:
                 st.warning("❌ Kunde inte hämta stängningspris.")
 
@@ -115,6 +121,9 @@ if user_input:
             # Tabell
             st.write("📋 Öppnings- och stängningspriser:")
             st.dataframe(df[['Open', 'Close']].sort_index(ascending=False).round(2))
+
+            # Signatur längst ner
+            st.markdown("<p style='text-align: center; color: gray; font-size: 13px;'>© 2025 av Julius</p>", unsafe_allow_html=True)
 else:
     st.info("🔍 Ange ett företagsnamn eller ticker för att se analysen.")
     st.markdown("<p style='text-align: center; color: gray; font-size: 13px;'>© 2025 av Julius</p>", unsafe_allow_html=True)
