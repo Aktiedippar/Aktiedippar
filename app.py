@@ -21,7 +21,7 @@ def get_data(ticker):
     df['RSI'] = compute_rsi(df['Close'])
     return df
 
-# Namn → Ticker (lägg till fler vid behov)
+# Namn → Ticker (lägg till fler här)
 name_to_ticker = {
     'apple': 'AAPL',
     'microsoft': 'MSFT',
@@ -32,48 +32,49 @@ name_to_ticker = {
     'evolution': 'EVO.ST'
 }
 
-# Rubrik
+# Titel
 st.title("📉 Aktier som dippar – möjliga köplägen")
 
 # Användarens inmatning
 input_names = st.text_input("Ange bolag (t.ex. saab, evolution, tesla):", "saab, evolution")
 
-# Översätt till tickers
+# Översätt namn till tickers
 input_list = [name.strip().lower() for name in input_names.split(',')]
 stock_list = [name_to_ticker[name] for name in input_list if name in name_to_ticker]
 
 if not stock_list:
     st.warning("⚠️ Inga giltiga bolagsnamn hittades. Kontrollera stavningen.")
 else:
-for stock in stock_list:
-    df = get_data(stock)
-    if df.empty:
-        st.write(f"⚠️ Ingen data för {stock}.")
-        continue
+    for stock in stock_list:
+        df = get_data(stock)
+        if df.empty:
+            st.write(f"⚠️ Ingen data för {stock}.")
+            continue
 
-    if 'RSI' not in df.columns or 'Close' not in df.columns:
-        st.write(f"⚠️ Kolumner saknas i {stock} – hoppar över.")
-        continue
+        if 'RSI' not in df.columns or 'Close' not in df.columns:
+            st.write(f"⚠️ Kolumner saknas i {stock} – hoppar över.")
+            continue
 
-    df = df.dropna(subset=['RSI', 'Close'])
+        df = df.dropna(subset=['RSI', 'Close'])
 
-    if df.empty:
-        st.write(f"⚠️ Ingen tillräcklig data för {stock} efter filtrering.")
-        continue
+        if df.empty:
+            st.write(f"⚠️ Ingen tillräcklig data för {stock} efter filtrering.")
+            continue
 
-    try:
-        latest_rsi = float(df['RSI'].iloc[-1])
-        latest_close = float(df['Close'].iloc[-1])
-    except Exception:
-        st.write(f"⚠️ Fel vid hämtning av senaste värden för {stock}.")
-        continue
+        try:
+            latest_rsi = float(df['RSI'].iloc[-1])
+            latest_close = float(df['Close'].iloc[-1])
+        except Exception:
+            st.write(f"⚠️ Fel vid hämtning av senaste värden för {stock}.")
+            continue
 
-    st.subheader(f"📊 {stock}")
-    st.write(f"💰 Senaste pris: **{latest_close:.2f} USD**")
+        # Visa analys
+        st.subheader(f"📊 {stock}")
+        st.write(f"💰 Senaste pris: **{latest_close:.2f} USD**")
 
-    if latest_rsi < 50:
-        st.write(f"📉 RSI: **{latest_rsi:.2f}** 🟠 *(Lågt RSI – kan vara köpläge)*")
-    else:
-        st.write(f"📈 RSI: **{latest_rsi:.2f}**")
+        if latest_rsi < 50:
+            st.write(f"📉 RSI: **{latest_rsi:.2f}** 🟠 *(Lågt RSI – kan vara köpläge)*")
+        else:
+            st.write(f"📈 RSI: **{latest_rsi:.2f}**")
 
-    st.line_chart(df['Close'])
+        st.line_chart(df['Close'])
