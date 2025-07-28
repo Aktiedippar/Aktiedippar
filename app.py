@@ -16,11 +16,10 @@ def compute_rsi(series, period=14):
 # Hämtar data
 def get_data(ticker):
     df = yf.download(ticker, period='3mo', interval='1d', auto_adjust=False)
-    if df.empty or 'Close' not in df.columns:
+    if df.empty or 'Close' not in df.columns or 'Open' not in df.columns:
         return pd.DataFrame()
     df['RSI'] = compute_rsi(df['Close'])
-    df = df[['Open', 'Close', 'RSI']]
-    return df
+    return df[['Open', 'Close', 'RSI']].dropna()
 
 # Namn → Ticker
 name_to_ticker = {
@@ -41,38 +40,31 @@ input_names = st.text_input("Ange bolag (t.ex. saab, evolution, tesla):", "saab,
 input_list = [name.strip().lower() for name in input_names.split(',')]
 stock_list = [name_to_ticker[name] for name in input_list if name in name_to_ticker]
 
+# Om inga giltiga namn
 if not stock_list:
     st.warning("⚠️ Inga giltiga bolagsnamn hittades.")
-else:
-    for name in input_list:
-        if name not in name_to_ticker:
-            st.write(f"⚠️ Okänt bolagsnamn: {name}")
-            continue
 
-        ticker = name_to_ticker[name]
-        df = get_data(ticker)
+# Analysera varje bolag
+for name in input_list:
+    if name not in name_to_ticker:
+        st.write(f"⚠️ Okänt bolagsnamn: {name}")
+        continue
 
-        if df.empty:
-            st.write(f"⚠️ Ingen data tillgänglig för {ticker}.")
-            continue
+    ticker = name_to_ticker[name]
+    df = get_data(ticker)
 
-        df = df.dropna()
-        if df.empty:
-            st.write(f"⚠️ För lite data för {ticker}.")
-            continue
+    if df.empty:
+        st.write(f"⚠️ Ingen data tillgänglig för {ticker}.")
+        continue
 
-        # Visa analys
-        st.subheader(f"📊 {name.title()} ({ticker})")
+    st.subheader(f"📊 {name.title()} ({ticker})")
 
-        # Senaste värden
-        latest_rsi = df['RSI'].iloc[-1]
-        latest_close = df['Close'].iloc[-1]
-        st.write(f"💰 Senaste stängningspris: **{latest_close:.2f} USD**")
-        st.write(f"📈 RSI: **{latest_rsi:.2f}**")
+    latest_rsi = df['RSI'].iloc[-1]
+    latest_close = df['Close'].iloc[-1]
 
-        # Diagram
-        st.line_chart(df[['Close']])
+    st.write(f"💰 Senaste stängningspris: **{latest_close:.2f} USD**")
+    st.write(f"📈 RSI: **{latest_rsi:.2f}**")
 
-        # Tabell med öppning/stängning
-        st.write("📅 Öppning & Stängning – senaste 3 månaderna:")
-        st.dataframe(df[['Open', 'Close']].sort_index(ascending=False).round(2))
+    st.line_chart(df['Close'])
+    st.write("📅 Öppning & Stängning – senaste 3 månaderna:")
+    st.dataframe(df[['Open', 'Close']].sort_index(ascending=False).round(2))
