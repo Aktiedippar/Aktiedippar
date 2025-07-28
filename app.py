@@ -13,15 +13,16 @@ def compute_rsi(series, period=14):
     rsi = 100 - (100 / (1 + rs))
     return rsi
 
-# Funktion som hämtar data
+# Hämtar data
 def get_data(ticker):
-    df = yf.download(ticker, period='6mo', auto_adjust=True)
+    df = yf.download(ticker, period='3mo', interval='1d', auto_adjust=False)
     if df.empty or 'Close' not in df.columns:
         return pd.DataFrame()
     df['RSI'] = compute_rsi(df['Close'])
+    df = df[['Open', 'Close', 'RSI']]
     return df
 
-# Namn → Ticker (lägg till fler här)
+# Namn → Ticker
 name_to_ticker = {
     'apple': 'AAPL',
     'microsoft': 'MSFT',
@@ -33,48 +34,45 @@ name_to_ticker = {
 }
 
 # Titel
-st.title("📉 Aktier som dippar – möjliga köplägen")
+st.title("📉 Aktier – Daglig prisdata och RSI")
 
-# Användarens inmatning
+# Inmatning
 input_names = st.text_input("Ange bolag (t.ex. saab, evolution, tesla):", "saab, evolution")
-
-# Översätt namn till tickers
 input_list = [name.strip().lower() for name in input_names.split(',')]
 stock_list = [name_to_ticker[name] for name in input_list if name in name_to_ticker]
 
 if not stock_list:
-    st.warning("⚠️ Inga giltiga bolagsnamn hittades. Kontrollera stavningen.")
+    st.warning("⚠️ Inga giltiga bolagsnamn hittades.")
 else:
-    for stock in stock_list:
-        df = get_data(stock)
-        if df.empty:
-            st.write(f"⚠️ Ingen data för {stock}.")
+    for name in input_list:
+        if name not in name_to_ticker:
+            st.write(f"⚠️ Okänt bolagsnamn: {name}")
             continue
 
-        if 'RSI' not in df.columns or 'Close' not in df.columns:
-            st.write(f"⚠️ Kolumner saknas i {stock} – hoppar över.")
-            continue
-
-        df = df.dropna(subset=['RSI', 'Close'])
+        ticker = name_to_ticker[name]
+        df = get_data(ticker)
 
         if df.empty:
-            st.write(f"⚠️ Ingen tillräcklig data för {stock} efter filtrering.")
+            st.write(f"⚠️ Ingen data tillgänglig för {ticker}.")
             continue
 
-        try:
-            latest_rsi = float(df['RSI'].iloc[-1])
-            latest_close = float(df['Close'].iloc[-1])
-        except Exception:
-            st.write(f"⚠️ Fel vid hämtning av senaste värden för {stock}.")
+        df = df.dropna()
+        if df.empty:
+            st.write(f"⚠️ För lite data för {ticker}.")
             continue
 
         # Visa analys
-        st.subheader(f"📊 {stock}")
-        st.write(f"💰 Senaste pris: **{latest_close:.2f} USD**")
+        st.subheader(f"📊 {name.title()} ({ticker})")
 
-        if latest_rsi < 50:
-            st.write(f"📉 RSI: **{latest_rsi:.2f}** 🟠 *(Lågt RSI – kan vara köpläge)*")
-        else:
-            st.write(f"📈 RSI: **{latest_rsi:.2f}**")
+        # Senaste värden
+        latest_rsi = df['RSI'].iloc[-1]
+        latest_close = df['Close'].iloc[-1]
+        st.write(f"💰 Senaste stängningspris: **{latest_close:.2f} USD**")
+        st.write(f"📈 RSI: **{latest_rsi:.2f}**")
 
-        st.line_chart(df['Close'])
+        # Diagram
+        st.line_chart(df[['Close']])
+
+        # Tabell med öppning/stängning
+        st.write("📅 Öppning & Stängning – senaste 3 månaderna:")
+        st.dataframe(df[['Open', 'Close']].sort_index(ascending=False).round(2))
