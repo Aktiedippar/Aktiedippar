@@ -13,32 +13,53 @@ def compute_rsi(series, period=14):
     rsi = 100 - (100 / (1 + rs))
     return rsi
 
-# Hämtar data för en aktie
+# Hämtar data från yfinance
 def get_data(ticker):
     df = yf.download(ticker, period='3mo', interval='1d', auto_adjust=False)
-    if df.empty:
+    if df.empty or 'Close' not in df.columns:
         return pd.DataFrame()
     df['RSI'] = compute_rsi(df['Close'])
     return df.dropna()
 
-# Lista på tickers
-stock_list = ["SAAB-B.ST", "EVO.ST"]
+# Tickers för Saab och Evolution
+stock_names = {
+    "Saab": "SAAB-B.ST",
+    "Evolution": "EVO.ST"
+}
 
+# Rubrik
 st.title("📉 Aktier som dippar – möjliga köplägen")
 
-# Analysera varje aktie
-for stock in stock_list:
-    df = get_data(stock)
-    if df.empty:
-        continue
+# Användaren väljer företag
+selected_name = st.selectbox("Välj ett bolag:", list(stock_names.keys()))
+ticker = stock_names[selected_name]
 
-    latest_close = df['Close'].iloc[-1]
-    latest_rsi = df['RSI'].iloc[-1]
+# Hämta data
+df = get_data(ticker)
 
-    st.subheader(f"{stock}")
-    st.write(f"💰 Senaste stängningspris: **{latest_close:.2f} SEK**")
-    st.write(f"📈 RSI: **{latest_rsi:.2f}**")
+# Visa data om den finns
+if df.empty:
+    st.error(f"Ingen data hittades för {selected_name}.")
+else:
+    st.subheader(f"{selected_name} ({ticker})")
+
+    # Hämta senaste värden säkert
+    latest_close = df['Close'].iloc[-1] if 'Close' in df.columns else None
+    latest_rsi = df['RSI'].iloc[-1] if 'RSI' in df.columns else None
+
+    if pd.notna(latest_close):
+        st.write(f"💰 Senaste stängningspris: **{latest_close:.2f} SEK**")
+    else:
+        st.write("❌ Kunde inte visa senaste stängningspris.")
+
+    if pd.notna(latest_rsi):
+        st.write(f"📈 RSI: **{latest_rsi:.2f}**")
+    else:
+        st.write("❌ Kunde inte visa RSI.")
+
+    # Linjediagram
     st.line_chart(df['Close'])
 
+    # Tabell med öppnings- och stängningspriser
     st.write("📋 Öppnings- och stängningspriser:")
     st.dataframe(df[['Open', 'Close']].sort_index(ascending=False).round(2))
