@@ -2,9 +2,6 @@ import streamlit as st
 import yfinance as yf
 import pandas as pd
 import altair as alt
-from sklearn.linear_model import LinearRegression
-from datetime import timedelta
-import numpy as np
 
 st.set_page_config(page_title="Aktier som dippar", page_icon="📉", layout="centered")
 
@@ -26,41 +23,9 @@ def get_data(ticker):
         if df.empty or 'Close' not in df.columns:
             return pd.DataFrame()
         df['RSI'] = compute_rsi(df['Close'])
-        df['Forecast'] = False  # markera verkliga data
         return df.dropna()
     except Exception:
         return pd.DataFrame()
-
-# --- SKAPA 7-DAGARS PROGNOS ---
-def add_forecast(df):
-    df = df.copy()
-    df = df.reset_index()
-
-    # Konvertera datum till numeriskt värde
-    df['Date_ordinal'] = df['Date'].map(pd.Timestamp.toordinal)
-    X = df['Date_ordinal'].values.reshape(-1, 1)
-    y = df['Close'].values
-
-    model = LinearRegression()
-    model.fit(X, y)
-
-    # Skapa framtida datum
-    last_date = df['Date'].max()
-    future_dates = [last_date + timedelta(days=i) for i in range(1, 8)]
-    future_ordinals = np.array([d.toordinal() for d in future_dates]).reshape(-1, 1)
-    future_prices = model.predict(future_ordinals)
-
-    forecast_df = pd.DataFrame({
-        'Date': future_dates,
-        'Close': future_prices.ravel(),
-        'Forecast': True
-    })
-
-    forecast_df.set_index('Date', inplace=True)
-    df.set_index('Date', inplace=True)
-
-    combined = pd.concat([df, forecast_df], sort=False)
-    return combined
 
 # --- NAMN -> TICKER MAPPNING ---
 stock_names = {
@@ -102,18 +67,14 @@ if user_input:
         if df.empty:
             st.error(f"⚠️ Ingen data hittades för {user_input.upper()} ({ticker}).")
         else:
-            df = add_forecast(df)
-
             # Gissad valuta
             currency = "SEK" if ".ST" in ticker else "USD"
 
             st.subheader(f"{user_input.capitalize()} ({ticker})")
 
-            historical_df = df[df['Forecast'] == False]
-
-            if not historical_df.empty:
-                latest_close = historical_df['Close'].iloc[-1]
-                latest_rsi = historical_df['RSI'].iloc[-1]
+            try:
+                latest_close = float(df['Close'].iloc[-1])
+                latest_rsi = float(df['RSI'].iloc[-1])
 
                 st.write(f"💰 Senaste stängningspris: **{latest_close:.2f} {currency}**")
 
@@ -123,37 +84,24 @@ if user_input:
                     st.warning(f"📈 RSI: **{latest_rsi:.2f}** – Överköpt (var försiktig)")
                 else:
                     st.write(f"📈 RSI: **{latest_rsi:.2f}**")
-            else:
-                st.warning("⚠️ Ingen giltig historisk data hittades för att visa stängningspris och RSI.")
+            except:
+                st.warning("⚠️ Kunde inte hämta stängningspris eller RSI.")
 
-            # PRISGRAF: blå = verklig, rosa = prognos
-            base = alt.Chart(df.reset_index())
-
-            actual = base.transform_filter(
-                alt.datum.Forecast == False
-            ).mark_line(color='blue').encode(
+            # PRISGRAF
+            st.write("📊 Prisgraf:")
+            chart = alt.Chart(df.reset_index()).mark_line().encode(
                 x='Date:T',
                 y='Close:Q',
-                tooltip=['Date:T', 'Close:Q']
-            )
+                tooltip=['Date:T', 'Close:Q', 'RSI:Q']
+            ).properties(
+                width=700,
+                height=400
+            ).interactive()
+            st.altair_chart(chart)
 
-            forecast = base.transform_filter(
-                alt.datum.Forecast == True
-            ).mark_line(color='pink', strokeDash=[4, 4]).encode(
-                x='Date:T',
-                y='Close:Q',
-                tooltip=['Date:T', 'Close:Q']
-            )
-
-            st.write("📊 Prisgraf med 7-dagars prognos:")
-            st.altair_chart((actual + forecast).properties(width=700, height=400).interactive())
-
-            # TABELL: bara historisk data med Open & Close
+            # TABELL
             st.write("📋 Öppnings- och stängningspriser:")
-            st.dataframe(
-                historical_df[['Open', 'Close']].dropna().sort_index(ascending=False).round(2)
-            )
-
+            st.dataframe(df[['Open', 'Close']].sort_index(ascending=False).round(2))
 else:
     st.info("🔍 Ange ett företagsnamn eller ticker för att se analysen.")
 
