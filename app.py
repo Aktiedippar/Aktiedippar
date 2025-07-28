@@ -39,8 +39,11 @@ stock_names = {
     "apple": "AAPL"
 }
 
-# --- TITEL ---
-st.title("📉 Aktier som dippar – möjliga köplägen 📈")
+# --- CENTRERAD RUBRIK ---
+st.markdown(
+    "<h1 style='text-align: center;'>📉 Aktier som dippar – möjliga köplägen</h1>",
+    unsafe_allow_html=True
+)
 
 # --- ANVÄNDARINPUT ---
 user_input = st.text_input("Skriv ett företagsnamn eller ticker (t.ex. 'saab', 'tesla', 'AAPL')").strip().lower()
