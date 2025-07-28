@@ -3,24 +3,32 @@ import yfinance as yf
 import pandas as pd
 import altair as alt
 
-# --- SIDKONFIGURATION ---
+# --- APP KONFIGURATION ---
 st.set_page_config(page_title="Aktier som dippar", page_icon="📉", layout="centered")
 
-# --- BAKGRUND & STIL ---
+# --- ANPASSAD STIL (inspirerad av Avanza) ---
 st.markdown("""
     <style>
-    .stApp {
-        background-color: #0b1f3a; /* Marinblå */
-        color: white;
+    body, .stApp {
+        background-color: #f8f9fa;
+        color: #212529;
+        font-family: 'Helvetica', sans-serif;
     }
-    h1, h2, h3, h4, h5, h6, p, div, span {
-        color: white !important;
+    h1, h2, h3 {
+        color: #0046b8;
     }
-    .metric-container {
-        background-color: #112b4a;
+    .metric-box {
+        background-color: #ffffff;
         padding: 1rem;
-        border-radius: 0.5rem;
+        border-radius: 8px;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.05);
         margin-bottom: 1rem;
+    }
+    .footer {
+        text-align: center;
+        color: gray;
+        font-size: 13px;
+        margin-top: 2rem;
     }
     </style>
 """, unsafe_allow_html=True)
@@ -43,6 +51,8 @@ def get_data(ticker):
         if df.empty or 'Close' not in df.columns:
             return pd.DataFrame()
         df['RSI'] = compute_rsi(df['Close'])
+        df['SMA20'] = df['Close'].rolling(window=20).mean()
+        df['SMA50'] = df['Close'].rolling(window=50).mean()
         return df.dropna()
     except Exception:
         return pd.DataFrame()
@@ -63,7 +73,7 @@ stock_names = {
 st.markdown("<h1 style='text-align: center;'>📉 Aktieanalys</h1>", unsafe_allow_html=True)
 
 # --- ANVÄNDARINPUT ---
-user_input = st.text_input("Skriv ett företagsnamn eller ticker (t.ex. 'saab', 'tesla', 'AAPL')").strip().lower()
+user_input = st.text_input("🔎 Skriv ett företagsnamn eller ticker (t.ex. 'saab', 'tesla', 'AAPL')").strip().lower()
 
 def resolve_ticker(user_input):
     if user_input in stock_names:
@@ -87,47 +97,44 @@ if user_input:
         if df.empty:
             st.error(f"⚠️ Ingen data hittades för {user_input.upper()} ({ticker}).")
         else:
-            # --- Hämta senaste värden ---
-            try:
-                latest_close = float(df['Close'].iloc[-1])
-            except:
-                latest_close = None
+            # --- METRIKSEKTION ---
+            latest_close = float(df['Close'].iloc[-1]) if 'Close' in df.columns else None
+            latest_rsi = float(df['RSI'].iloc[-1]) if 'RSI' in df.columns else None
 
-            try:
-                latest_rsi = float(df['RSI'].iloc[-1])
-            except:
-                latest_rsi = None
+            st.markdown("<div class='metric-box'>", unsafe_allow_html=True)
+            st.subheader(f"{user_input.capitalize()} ({ticker})")
+            if latest_close is not None:
+                st.write(f"💰 Senaste stängningspris: **{latest_close:.2f} SEK**")
+            if latest_rsi is not None:
+                st.write(f"📊 RSI: **{latest_rsi:.2f}**")
+            st.markdown("</div>", unsafe_allow_html=True)
 
-            # --- Visa rubrik och nyckeltal ---
-            if latest_close is not None and latest_rsi is not None:
-                st.markdown(f"""
-                    <div class="metric-container">
-                        <h2>{user_input.capitalize()} ({ticker})</h2>
-                        <p>💰 Stängningspris: <b>{latest_close:.2f} SEK</b></p>
-                        <p>📊 RSI: <b>{latest_rsi:.2f}</b></p>
-                    </div>
-                """, unsafe_allow_html=True)
-            else:
-                st.warning("Kunde inte visa stängningspris och RSI.")
-
-            # --- Prisgraf ---
-            st.write("📊 Prisgraf:")
-            chart = alt.Chart(df.reset_index()).mark_line(color='lightblue').encode(
+            # --- GRAF ---
+            st.write("📈 Prisgraf med glidande medelvärden:")
+            chart = alt.Chart(df.reset_index()).mark_line().encode(
                 x='Date:T',
                 y='Close:Q',
                 tooltip=['Date:T', 'Close:Q', 'RSI:Q']
-            ).properties(
-                width=700,
-                height=400
-            ).interactive()
-            st.altair_chart(chart)
+            ).properties(width=700, height=400)
 
-            # --- Tabell ---
+            sma20_line = alt.Chart(df.reset_index()).mark_line(color='green').encode(
+                x='Date:T',
+                y='SMA20:Q'
+            )
+
+            sma50_line = alt.Chart(df.reset_index()).mark_line(color='orange').encode(
+                x='Date:T',
+                y='SMA50:Q'
+            )
+
+            st.altair_chart(chart + sma20_line + sma50_line)
+
+            # --- TABELL ---
             st.write("📋 Öppnings- och stängningspriser:")
-            if 'Open' in df.columns and 'Close' in df.columns:
-                st.dataframe(df[['Open', 'Close']].sort_index(ascending=False).round(2))
-            else:
-                st.warning("❌ Data saknar öppnings- eller stängningspriser.")
+            st.dataframe(df[['Open', 'Close']].sort_index(ascending=False).round(2))
+
+# --- INFO OM SIGNATUR ---
 else:
     st.info("🔍 Ange ett företagsnamn eller ticker för att se analysen.")
-    st.markdown("<p style='text-align: center; color: gray; font-size: 13px;'>© 2025 av Julius</p>", unsafe_allow_html=True)
+
+st.markdown("<div class='footer'>© 2025 av Julius</div>", unsafe_allow_html=True)
