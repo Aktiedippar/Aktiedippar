@@ -19,38 +19,48 @@ def compute_rsi(series, period=14):
     rsi = 100 - (100 / (1 + rs))
     return rsi
 
-# --- DATAHÄMTNING MED PROGNOS ---
-def get_data_with_forecast(ticker):
-    df = yf.download(ticker, period='3mo', interval='1d', auto_adjust=False)
-
-    if df.empty or 'Close' not in df.columns:
+# --- DATAHÄMTNING ---
+def get_data(ticker):
+    try:
+        df = yf.download(ticker, period='3mo', interval='1d', auto_adjust=False)
+        if df.empty or 'Close' not in df.columns:
+            return pd.DataFrame()
+        df['RSI'] = compute_rsi(df['Close'])
+        df['Forecast'] = False  # markera verkliga data
+        return df.dropna()
+    except Exception:
         return pd.DataFrame()
 
-    df['RSI'] = compute_rsi(df['Close'])
-    df = df.dropna()
-    df['Forecast'] = False  # Markera som historiska värden
+# --- SKAPA 7-DAGARS PROGNOS ---
+def add_forecast(df):
+    df = df.copy()
+    df = df.reset_index()
 
-    # Prognos på 7 dagar med linjär regression
-    try:
-        df_model = df.tail(14).copy()
-        df_model['Days'] = (df_model.index - df_model.index.min()).days
-        X = df_model[['Days']]
-        y = df_model['Close']
-        model = LinearRegression()
-        model.fit(X, y)
+    # Konvertera datum till numeriskt värde
+    df['Date_ordinal'] = df['Date'].map(pd.Timestamp.toordinal)
+    X = df['Date_ordinal'].values.reshape(-1, 1)
+    y = df['Close'].values
 
-        future_dates = [df.index[-1] + timedelta(days=i) for i in range(1, 8)]
-        future_days = [(d - df.index.min()).days for d in future_dates]
-        future_prices = model.predict(np.array(future_days).reshape(-1, 1))
+    model = LinearRegression()
+    model.fit(X, y)
 
-        forecast_df = pd.DataFrame({'Close': future_prices.ravel()}, index=future_dates)
-        forecast_df['Forecast'] = True
+    # Skapa framtida datum
+    last_date = df['Date'].max()
+    future_dates = [last_date + timedelta(days=i) for i in range(1, 8)]
+    future_ordinals = np.array([d.toordinal() for d in future_dates]).reshape(-1, 1)
+    future_prices = model.predict(future_ordinals)
 
-        df_combined = pd.concat([df, forecast_df])
-        return df_combined
+    forecast_df = pd.DataFrame({
+        'Date': future_dates,
+        'Close': future_prices.ravel(),
+        'Forecast': True
+    })
 
-    except Exception as e:
-        return df
+    forecast_df.set_index('Date', inplace=True)
+    df.set_index('Date', inplace=True)
+
+    combined = pd.concat([df, forecast_df], sort=False)
+    return combined
 
 # --- NAMN -> TICKER MAPPNING ---
 stock_names = {
@@ -64,7 +74,7 @@ stock_names = {
     "apple": "AAPL"
 }
 
-# --- RUBRIK ---
+# --- CENTRERAD RUBRIK ---
 st.markdown("<h1 style='text-align: center;'>📉 Aktieanalys 📈</h1>", unsafe_allow_html=True)
 
 # --- ANVÄNDARINPUT ---
@@ -87,30 +97,36 @@ if user_input:
     if ticker is None:
         st.error("❌ Kunde inte hitta någon giltig ticker för det du skrev.")
     else:
-        df = get_data_with_forecast(ticker)
+        df = get_data(ticker)
 
         if df.empty:
             st.error(f"⚠️ Ingen data hittades för {user_input.upper()} ({ticker}).")
         else:
-            st.subheader(f"{user_input.capitalize()} ({ticker})")
+            df = add_forecast(df)
 
+            # Gissad valuta
             currency = "SEK" if ".ST" in ticker else "USD"
 
-            # Hämta senaste stängningspris
-            latest_close = df[df['Forecast'] == False]['Close'].iloc[-1]
-            latest_rsi = df[df['Forecast'] == False]['RSI'].iloc[-1]
+            st.subheader(f"{user_input.capitalize()} ({ticker})")
 
-            st.write(f"💰 Senaste stängningspris: **{latest_close:.2f} {currency}**")
+            historical_df = df[df['Forecast'] == False]
 
-            # Visa RSI
-            if latest_rsi < 30:
-                st.success(f"📉 RSI: **{latest_rsi:.2f}** – Översåld (möjligt köpläge)")
-            elif latest_rsi > 70:
-                st.warning(f"📈 RSI: **{latest_rsi:.2f}** – Överköpt (var försiktig)")
+            if not historical_df.empty:
+                latest_close = historical_df['Close'].iloc[-1]
+                latest_rsi = historical_df['RSI'].iloc[-1]
+
+                st.write(f"💰 Senaste stängningspris: **{latest_close:.2f} {currency}**")
+
+                if latest_rsi < 30:
+                    st.success(f"📉 RSI: **{latest_rsi:.2f}** – Översåld (möjligt köpläge)")
+                elif latest_rsi > 70:
+                    st.warning(f"📈 RSI: **{latest_rsi:.2f}** – Överköpt (var försiktig)")
+                else:
+                    st.write(f"📈 RSI: **{latest_rsi:.2f}**")
             else:
-                st.write(f"📈 RSI: **{latest_rsi:.2f}**")
+                st.warning("⚠️ Ingen giltig historisk data hittades för att visa stängningspris och RSI.")
 
-            # --- GRAF ---
+            # PRISGRAF: blå = verklig, rosa = prognos
             base = alt.Chart(df.reset_index())
 
             actual = base.transform_filter(
@@ -132,14 +148,14 @@ if user_input:
             st.write("📊 Prisgraf med 7-dagars prognos:")
             st.altair_chart((actual + forecast).properties(width=700, height=400).interactive())
 
-            # --- TABELL ---
-            st.write("📋 Öppnings- och stängningspriser (historiska):")
+            # TABELL: bara historisk data med Open & Close
+            st.write("📋 Öppnings- och stängningspriser:")
             st.dataframe(
-                df[df['Forecast'] == False][['Open', 'Close']]
-                .dropna()
-                .sort_index(ascending=False)
-                .round(2)
+                historical_df[['Open', 'Close']].dropna().sort_index(ascending=False).round(2)
             )
 
-# --- SIGNATUR ---
+else:
+    st.info("🔍 Ange ett företagsnamn eller ticker för att se analysen.")
+
+# --- DISKRET SIGNATUR ---
 st.markdown("<p style='text-align: center; color: gray; font-size: 13px;'>© 2025 av Julius</p>", unsafe_allow_html=True)
