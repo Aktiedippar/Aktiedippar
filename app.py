@@ -13,7 +13,7 @@ def compute_rsi(series, period=14):
     rsi = 100 - (100 / (1 + rs))
     return rsi
 
-# Hämtar data
+# Hämtar data för en aktie
 def get_data(ticker):
     df = yf.download(ticker, period='3mo', interval='1d', auto_adjust=False)
     if df.empty:
@@ -21,30 +21,24 @@ def get_data(ticker):
     df['RSI'] = compute_rsi(df['Close'])
     return df.dropna()
 
-# Mappar företagsnamn till rätt ticker
-stock_names = {
-    "Saab": "SAAB-B.ST",
-    "Evolution": "EVO.ST"
-}
+# Lista på tickers
+stock_list = ["SAAB-B.ST", "EVO.ST"]
 
 st.title("📉 Aktier som dippar – möjliga köplägen")
 
-# Användaren väljer bolag
-selected_name = st.selectbox("Välj ett bolag:", list(stock_names.keys()))
-ticker = stock_names[selected_name]
+# Analysera varje aktie
+for stock in stock_list:
+    df = get_data(stock)
+    if df.empty:
+        continue
 
-# Hämta data
-df = get_data(ticker)
+    latest_close = df['Close'].iloc[-1]
+    latest_rsi = df['RSI'].iloc[-1]
 
-# Om data finns, visa analys
-if not df.empty:
-    st.subheader(f"{selected_name} ({ticker})")
-    st.write(f"💰 Senaste stängningspris: **{df['Close'].iloc[-1]:.2f} SEK**")
-    st.write(f"📈 RSI: **{df['RSI'].iloc[-1]:.2f}**")
+    st.subheader(f"{stock}")
+    st.write(f"💰 Senaste stängningspris: **{latest_close:.2f} SEK**")
+    st.write(f"📈 RSI: **{latest_rsi:.2f}**")
     st.line_chart(df['Close'])
+
     st.write("📋 Öppnings- och stängningspriser:")
     st.dataframe(df[['Open', 'Close']].sort_index(ascending=False).round(2))
-
-# Om data saknas, visa felmeddelande
-if df.empty:
-    st.error(f"Ingen data hittades för {selected_name}.")
