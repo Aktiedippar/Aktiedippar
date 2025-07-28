@@ -19,33 +19,31 @@ def get_data(ticker):
     if df.empty or 'Close' not in df.columns or 'Open' not in df.columns:
         return pd.DataFrame()
     df['RSI'] = compute_rsi(df['Close'])
-    return df[['Open', 'Close', 'RSI']].dropna()
+    return df.dropna(subset=['Close', 'Open', 'RSI'])
 
-# Aktielista
-ticker_map = {
+# Mappar företagsnamn till rätt ticker
+stock_names = {
     "Saab": "SAAB-B.ST",
     "Evolution": "EVO.ST"
 }
 
-st.title("📉 Saab & Evolution – Aktiedata")
+st.title("📉 Aktier som dippar – möjliga köplägen")
 
-# Välj aktie
-selected_stock = st.selectbox("Välj ett bolag:", list(ticker_map.keys()))
-ticker = ticker_map[selected_stock]
+# Användaren väljer bolag
+selected_name = st.selectbox("Välj ett bolag:", list(stock_names.keys()))
+ticker = stock_names[selected_name]
 
-# Hämta data
+# Hämta och visa data
 df = get_data(ticker)
 
 if df.empty:
-    st.error(f"Ingen data hittades för {selected_stock} ({ticker}).")
+    st.error(f"Ingen data hittades för {selected_name}.")
 else:
-    latest_close = df['Close'].iloc[-1]
-    latest_rsi = df['RSI'].iloc[-1]
-
-    st.subheader(f"{selected_stock} ({ticker})")
-    st.write(f"💰 Senaste stängningspris: **{latest_close:.2f} SEK**")
-    st.write(f"📈 RSI: **{latest_rsi:.2f}**")
+    st.subheader(f"{selected_name} ({ticker})")
+    st.write(f"💰 Senaste stängningspris: **{df['Close'].iloc[-1]:.2f} SEK**")
+    st.write(f"📈 RSI: **{df['RSI'].iloc[-1]:.2f}**")
+    
     st.line_chart(df['Close'])
 
-    st.write("📋 Öppning & Stängning – senaste 3 månaderna:")
-    st.dataframe(df[['Open', 'Close']].sort_index(ascending=False).round(2))
+    st.write("📋 Öppnings- och stängningspriser senaste 3 månaderna:")
+    st.dataframe(df[['Open', 'Close']].round(2).sort_index(ascending=False))
