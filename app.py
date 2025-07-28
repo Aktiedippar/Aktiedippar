@@ -3,7 +3,7 @@ import yfinance as yf
 import pandas as pd
 import altair as alt
 
-st.set_page_config(page_title="Aktier som dippar", layout="centered")
+st.set_page_config(page_title="Aktier som dippar", page_icon="📉", layout="centered")
 
 # --- RSI-BERÄKNING ---
 def compute_rsi(series, period=14):
@@ -27,7 +27,7 @@ def get_data(ticker):
     except Exception:
         return pd.DataFrame()
 
-# --- SNABB-NAMN -> TICKER MAPPNING ---
+# --- NAMN -> TICKER MAPPNING ---
 stock_names = {
     "saab": "SAAB-B.ST",
     "evo": "EVO.ST",
@@ -42,21 +42,18 @@ stock_names = {
 # --- TITEL ---
 st.title("📉 Aktier som dippar – möjliga köplägen")
 
-# --- INPUT ---
+# --- ANVÄNDARINPUT ---
 user_input = st.text_input("Skriv ett företagsnamn eller ticker (t.ex. 'saab', 'tesla', 'AAPL')").strip().lower()
 
 def resolve_ticker(user_input):
     if user_input in stock_names:
         return stock_names[user_input]
-    
-    # Testa om input är en faktisk ticker (t.ex. "TSLA")
     try:
         test_df = yf.download(user_input.upper(), period='1d')
         if not test_df.empty:
             return user_input.upper()
     except:
         pass
-
     return None
 
 if user_input:
@@ -73,17 +70,24 @@ if user_input:
             st.subheader(f"{user_input.capitalize()} ({ticker})")
 
             # Hämta senaste värden
-            latest_close = df['Close'].iloc[-1] if 'Close' in df.columns else None
-            latest_rsi = df['RSI'].iloc[-1] if 'RSI' in df.columns else None
+            try:
+                latest_close = float(df['Close'].iloc[-1])
+            except Exception:
+                latest_close = None
+
+            try:
+                latest_rsi = float(df['RSI'].iloc[-1])
+            except Exception:
+                latest_rsi = None
 
             # Visa stängningspris
-            if pd.notna(latest_close):
+            if latest_close is not None:
                 st.write(f"💰 Senaste stängningspris: **{latest_close:.2f} SEK**")
             else:
                 st.warning("❌ Kunde inte hämta stängningspris.")
 
-            # Visa RSI med färg
-            if pd.notna(latest_rsi):
+            # Visa RSI
+            if latest_rsi is not None:
                 if latest_rsi < 30:
                     st.success(f"📉 RSI: **{latest_rsi:.2f}** – Översåld (möjligt köpläge)")
                 elif latest_rsi > 70:
