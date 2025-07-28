@@ -13,7 +13,7 @@ def compute_rsi(series, period=14):
     rsi = 100 - (100 / (1 + rs))
     return rsi
 
-# Hämtar data
+# Hämta data
 def get_data(ticker):
     df = yf.download(ticker, period='3mo', interval='1d', auto_adjust=False)
     if df.empty or 'Close' not in df.columns or 'Open' not in df.columns:
@@ -21,50 +21,31 @@ def get_data(ticker):
     df['RSI'] = compute_rsi(df['Close'])
     return df[['Open', 'Close', 'RSI']].dropna()
 
-# Namn → Ticker
-name_to_ticker = {
-    'apple': 'AAPL',
-    'microsoft': 'MSFT',
-    'tesla': 'TSLA',
-    'amazon': 'AMZN',
-    'google': 'GOOGL',
-    'saab': 'SAAB-B.ST',
-    'evolution': 'EVO.ST'
+# Aktielista
+ticker_map = {
+    "Saab": "SAAB-B.ST",
+    "Evolution": "EVO.ST"
 }
 
-# Titel
-st.title("📉 Aktier – Daglig prisdata och RSI")
+st.title("📉 Saab & Evolution – Aktiedata")
 
-# Inmatning
-input_names = st.text_input("Ange bolag (t.ex. saab, evolution, tesla):", "saab, evolution")
-input_list = [name.strip().lower() for name in input_names.split(',')]
-stock_list = [name_to_ticker[name] for name in input_list if name in name_to_ticker]
+# Välj aktie
+selected_stock = st.selectbox("Välj ett bolag:", list(ticker_map.keys()))
+ticker = ticker_map[selected_stock]
 
-# Om inga giltiga namn
-if not stock_list:
-    st.warning("⚠️ Inga giltiga bolagsnamn hittades.")
+# Hämta data
+df = get_data(ticker)
 
-# Analysera varje bolag
-for name in input_list:
-    if name not in name_to_ticker:
-        st.write(f"⚠️ Okänt bolagsnamn: {name}")
-        continue
-
-    ticker = name_to_ticker[name]
-    df = get_data(ticker)
-
-    if df.empty:
-        st.write(f"⚠️ Ingen data tillgänglig för {ticker}.")
-        continue
-
-    st.subheader(f"📊 {name.title()} ({ticker})")
-
-    latest_rsi = df['RSI'].iloc[-1]
+if df.empty:
+    st.error(f"Ingen data hittades för {selected_stock} ({ticker}).")
+else:
     latest_close = df['Close'].iloc[-1]
+    latest_rsi = df['RSI'].iloc[-1]
 
-    st.write(f"💰 Senaste stängningspris: **{latest_close:.2f} USD**")
+    st.subheader(f"{selected_stock} ({ticker})")
+    st.write(f"💰 Senaste stängningspris: **{latest_close:.2f} SEK**")
     st.write(f"📈 RSI: **{latest_rsi:.2f}**")
-
     st.line_chart(df['Close'])
-    st.write("📅 Öppning & Stängning – senaste 3 månaderna:")
+
+    st.write("📋 Öppning & Stängning – senaste 3 månaderna:")
     st.dataframe(df[['Open', 'Close']].sort_index(ascending=False).round(2))
