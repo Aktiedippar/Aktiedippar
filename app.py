@@ -117,3 +117,4 @@ if user_input:
             st.dataframe(df[['Open', 'Close']].sort_index(ascending=False).round(2))
 else:
     st.info("🔍 Ange ett företagsnamn eller ticker för att se analysen.")
+    st.markdown("<p style='text-align: center; color: gray; font-size: 13px;'>© 2025 av Julius</p>", unsafe_allow_html=True)
