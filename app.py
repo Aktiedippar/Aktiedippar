@@ -41,7 +41,7 @@ stock_names = {
 
 # --- CENTRERAD RUBRIK ---
 st.markdown(
-    "<h1 style='text-align: center;'>📉 Aktier som dippar – möjliga köplägen 📈</h1>",
+    "<h1 style='text-align: center;'>📉Aktiedippen📈</h1>",
     unsafe_allow_html=True
 )
 
@@ -117,3 +117,7 @@ if user_input:
             st.dataframe(df[['Open', 'Close']].sort_index(ascending=False).round(2))
 else:
     st.info("🔍 Ange ett företagsnamn eller ticker för att se analysen.")
+    st.dataframe(df[['Open', 'Close']].sort_index(ascending=False).round(2))  # sista tabellen
+
+# Din signatur
+st.markdown("<p style='text-align: center; color: gray;'>© 2025 av Julius</p>", unsafe_allow_html=True)
