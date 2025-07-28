@@ -9,6 +9,8 @@ rsi_threshold = 30
 
 def get_data(ticker):
     df = yf.download(ticker, period='3mo')
+    if df.empty or 'Adj Close' not in df.columns:
+        return pd.DataFrame()  # returnera tomt om ingen data
     df['RSI'] = compute_rsi(df['Adj Close'])
     return df
 
@@ -29,4 +31,3 @@ for stock in stocks:
     latest_close = df['Adj Close'].iloc[-1]
     if latest_rsi < rsi_threshold:
         st.write(f"📉 {stock} – RSI: {latest_rsi:.2f} – Pris: {latest_close:.2f} kr")
-        
