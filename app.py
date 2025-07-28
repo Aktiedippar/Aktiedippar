@@ -18,11 +18,14 @@ def compute_rsi(series, period=14):
 
 # --- DATAHÄMTNING ---
 def get_data(ticker):
-    df = yf.download(ticker, period='3mo', interval='1d', auto_adjust=False)
-    if df.empty or 'Close' not in df.columns:
+    try:
+        df = yf.download(ticker, period='3mo', interval='1d', auto_adjust=False)
+        if df.empty or 'Close' not in df.columns:
+            return pd.DataFrame()
+        df['RSI'] = compute_rsi(df['Close'])
+        return df.dropna()
+    except Exception:
         return pd.DataFrame()
-    df['RSI'] = compute_rsi(df['Close'])
-    return df.dropna()
 
 # --- SNABB-NAMN -> TICKER MAPPNING ---
 stock_names = {
@@ -43,11 +46,10 @@ st.title("📉 Aktier som dippar – möjliga köplägen")
 user_input = st.text_input("Skriv ett företagsnamn eller ticker (t.ex. 'saab', 'tesla', 'AAPL')").strip().lower()
 
 def resolve_ticker(user_input):
-    # Först: försök via egen mapping
     if user_input in stock_names:
         return stock_names[user_input]
-
-    # Nästa: testa om det är en riktig ticker (ex: "TSLA", "AAPL", "ERIC-B.ST")
+    
+    # Testa om input är en faktisk ticker (t.ex. "TSLA")
     try:
         test_df = yf.download(user_input.upper(), period='1d')
         if not test_df.empty:
@@ -70,18 +72,26 @@ if user_input:
         else:
             st.subheader(f"{user_input.capitalize()} ({ticker})")
 
-            # Senaste värden
-            latest_close = df['Close'].iloc[-1]
-            latest_rsi = df['RSI'].iloc[-1]
+            # Hämta senaste värden
+            latest_close = df['Close'].iloc[-1] if 'Close' in df.columns else None
+            latest_rsi = df['RSI'].iloc[-1] if 'RSI' in df.columns else None
 
-            st.write(f"💰 Senaste stängningspris: **{latest_close:.2f} SEK**")
-
-            if latest_rsi < 30:
-                st.success(f"📉 RSI: **{latest_rsi:.2f}** – Översåld (möjligt köpläge)")
-            elif latest_rsi > 70:
-                st.warning(f"📈 RSI: **{latest_rsi:.2f}** – Överköpt (var försiktig)")
+            # Visa stängningspris
+            if pd.notna(latest_close):
+                st.write(f"💰 Senaste stängningspris: **{latest_close:.2f} SEK**")
             else:
-                st.write(f"📈 RSI: **{latest_rsi:.2f}**")
+                st.warning("❌ Kunde inte hämta stängningspris.")
+
+            # Visa RSI med färg
+            if pd.notna(latest_rsi):
+                if latest_rsi < 30:
+                    st.success(f"📉 RSI: **{latest_rsi:.2f}** – Översåld (möjligt köpläge)")
+                elif latest_rsi > 70:
+                    st.warning(f"📈 RSI: **{latest_rsi:.2f}** – Överköpt (var försiktig)")
+                else:
+                    st.write(f"📈 RSI: **{latest_rsi:.2f}**")
+            else:
+                st.warning("❌ Kunde inte hämta RSI-värde.")
 
             # Prisgraf
             st.write("📊 Prisgraf:")
