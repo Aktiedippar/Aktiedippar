@@ -1,47 +1,23 @@
 import streamlit as st
 import yfinance as yf
-import pandas as pd
 
-# Funktion för att räkna RSI
-def compute_rsi(series, period=14):
-    delta = series.diff()
-    gain = delta.where(delta > 0, 0.0)
-    loss = -delta.where(delta < 0, 0.0)
-    avg_gain = gain.rolling(window=period).mean()
-    avg_loss = loss.rolling(window=period).mean()
-    rs = avg_gain / avg_loss
-    rsi = 100 - (100 / (1 + rs))
-    return rsi
+st.set_page_config(page_title="Aktieanalys", layout="centered")
 
-# Hämtar data för ett bolag
-def get_data(ticker):
-    df = yf.download(ticker, period='3mo', auto_adjust=True)
-    if df.empty or 'Close' not in df.columns:
-        return pd.DataFrame()
-    df['RSI'] = compute_rsi(df['Close'])
-    return df
+st.title("📈 Aktieanalys App")
 
-# Lista på aktier att analysera (lägg till fler om du vill)
-stock_list = [
-    'AAPL', 'MSFT', 'TSLA', 'AMZN', 'GOOGL',
-    'SAAB-B.ST',      # SAAB B
-    'EVO.ST'          # Evolution AB
-]
-st.title("📉 Aktier som dippar – möjliga köplägen")
+ticker = st.text_input("Skriv in en akties ticker (t.ex. AAPL, EVO.ST)", "EVO.ST")
 
-# Analysera varje aktie
-for stock in stock_list:
-    df = get_data(stock)
-    if df.empty:
-        continue
+if ticker:
+    stock = yf.Ticker(ticker)
+    data = stock.history(period="6mo")
 
-    latest_rsi = df['RSI'].iloc[-1]
-    latest_close = df['Close'].iloc[-1]
+    st.subheader(f"Senaste 6 månaders pris för {ticker}")
+    st.line_chart(data['Close'])
 
-    st.subheader(f"📊 {stock}")
-st.write(f"💰 Senaste pris: **{latest_close:.2f} USD**")
-if latest_rsi < 50:
-    st.write(f"📉 RSI: **{latest_rsi:.2f}** 🟠 *(Lågt RSI)*")
-else:
-    st.write(f"📈 RSI: **{latest_rsi:.2f}**")
-st.line_chart(df['Close'])
+    st.subheader("Nyckeltal")
+    info = stock.info
+    st.write(f"**Företagsnamn:** {info.get('longName')}")
+    st.write(f"**Marknadsvärde:** {info.get('marketCap')}")
+    st.write(f"**PE-tal (TTM):** {info.get('trailingPE')}")
+    st.write(f"**Utdelning (%):** {info.get('dividendYield')}")
+
