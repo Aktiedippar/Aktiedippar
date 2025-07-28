@@ -3,15 +3,15 @@ import yfinance as yf
 import pandas as pd
 import altair as alt
 
-# --- SVART BAKGRUND & LJUS TEXT ---
+# --- MARINBLÅ BAKGRUND & LJUS TEXT ---
 st.markdown("""
     <style>
     body {
-        background-color: #000000;
+        background-color: #001f3f;
         color: white;
     }
     .stApp {
-        background-color: #000000;
+        background-color: #001f3f;
         color: white;
     }
     h1, h2, h3, h4, h5, h6, p, div, span {
