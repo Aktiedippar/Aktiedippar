@@ -2,117 +2,119 @@ import streamlit as st
 import yfinance as yf
 import pandas as pd
 import altair as alt
-from datetime import date, timedelta
+from datetime import datetime, timedelta
 
 st.set_page_config(page_title="Aktiedippar", layout="wide")
 
-# --- Färgtema liknande Avanza ---
+# --- Stilmall för Avanza-liknande utseende ---
 st.markdown("""
     <style>
         body {
-            background-color: #0a1929;
+            background-color: #001f3f;
             color: white;
         }
-        .css-18e3th9 {
-            background-color: #0a1929;
+        .block-container {
+            padding-top: 2rem;
+            padding-bottom: 2rem;
         }
-        .stApp {
-            background-color: #0a1929;
+        h1 {
+            color: #39CCCC;
+            text-align: center;
+        }
+        .stDataFrame {
+            background-color: white;
+            color: black;
+        }
+        footer {
+            visibility: hidden;
+        }
+        .creator {
+            text-align: center;
+            font-size: 12px;
+            color: #bbbbbb;
+            margin-top: 30px;
         }
     </style>
 """, unsafe_allow_html=True)
 
-# --- Titel ---
-st.markdown("<h1 style='text-align: center; color: white;'>Aktiedippar</h1>", unsafe_allow_html=True)
+st.markdown("<h1>📊 Aktiedippar</h1>", unsafe_allow_html=True)
 
-# --- Sökfält för företagsnamn ---
-ticker_input = st.text_input("Sök företag eller ticker", "SAAB")
+# --- Sökruta för företagsnamn ---
+user_input = st.text_input("Sök företagsnamn eller ticker", value="Saab")
 
-# --- Ticker-konvertering ---
-def get_ticker(name):
-    name = name.lower()
-    mapping = {
-        "saab": "SAAB-B.ST",
-        "volvo": "VOLV-B.ST",
-        "evolution": "EVO.ST",
-        "hm": "HM-B.ST",
-        "ericsson": "ERIC-B.ST",
-        "tesla": "TSLA",
-        "apple": "AAPL",
-        "microsoft": "MSFT"
-    }
-    return mapping.get(name, name)
+# --- Automatisk konvertering från namn till ticker ---
+ticker_map = {
+    "saab": "SAAB-B.ST",
+    "volvo": "VOLV-B.ST",
+    "evolution": "EVO.ST",
+    "tesla": "TSLA",
+    "apple": "AAPL",
+    "microsoft": "MSFT",
+    "google": "GOOGL"
+}
 
-ticker = get_ticker(ticker_input)
-
-# --- Hämta historisk data ---
-end = date.today()
-start = end - timedelta(days=90)
+ticker = ticker_map.get(user_input.lower(), user_input.upper())
 
 try:
-    df = yf.download(ticker, start=start, end=end)
+    end_date = datetime.today()
+    start_date = end_date - timedelta(days=90)
 
+    df = yf.download(ticker, start=start_date, end=end_date)
     if df.empty:
-        st.error(f"Ingen data hittades för {ticker_input} ({ticker}).")
+        st.error(f"Ingen data hittades för {user_input} ({ticker}).")
     else:
-        df["Date"] = df.index
-        df = df[["Date", "Open", "Close", "Volume"]].dropna()
+        df = df[['Open', 'Close', 'Volume']]
+        df.dropna(inplace=True)
+        df.index = pd.to_datetime(df.index)
 
-        # --- RSI-beräkning ---
-        delta = df["Close"].diff()
-        gain = delta.where(delta > 0, 0)
-        loss = -delta.where(delta < 0, 0)
-        avg_gain = gain.rolling(window=14).mean()
-        avg_loss = loss.rolling(window=14).mean()
-        rs = avg_gain / avg_loss
-        rsi = 100 - (100 / (1 + rs))
-        df["RSI"] = rsi
-
-        # --- SMA20 ---
-        df["SMA20"] = df["Close"].rolling(window=20).mean()
-
-        # --- Senaste stängningspris ---
+        # Hämta senaste stängningspriset (sista datumet)
         latest_close = df["Close"].iloc[-1]
         st.write(f"💰 Senaste stängningspris: **{latest_close:.2f} SEK**")
 
-        # --- Grafer ---
-        min_price = float(df["Close"].min())
-        max_price = float(df["Close"].max())
+        # SMA
+        df["SMA 20"] = df["Close"].rolling(window=20).mean()
 
-        chart = alt.Chart(df).mark_line(color="#1f77b4").encode(
+        # RSI
+        delta = df["Close"].diff()
+        gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+        loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+        rs = gain / loss
+        df["RSI"] = 100 - (100 / (1 + rs))
+
+        # --- Graf ---
+        min_price = df["Close"].min()
+        max_price = df["Close"].max()
+
+        base = alt.Chart(df.reset_index()).encode(
             x=alt.X("Date:T", title="Datum"),
             y=alt.Y("Close:Q", title="Stängningspris (SEK)",
-                    scale=alt.Scale(domain=[min_price * 0.95, max_price * 1.05]))
-        ).properties(
-            width=800,
-            height=400,
-            title="Stängningspris (senaste 3 månaderna)"
+                   scale=alt.Scale(domain=[min_price * 0.95, max_price * 1.05]))
         )
 
-        sma_line = alt.Chart(df).mark_line(color="orange").encode(
+        close_line = base.mark_line(color="lightblue").encode(
+            tooltip=["Date:T", "Close:Q"]
+        )
+
+        sma_line = base.mark_line(color="orange").encode(
+            y="SMA 20:Q",
+            tooltip=["Date:T", "SMA 20:Q"]
+        )
+
+        st.altair_chart(close_line + sma_line, use_container_width=True)
+
+        # Visa tabell
+        st.dataframe(df[['Open', 'Close']].dropna().sort_index(ascending=False).round(2))
+
+        # Visa RSI-graf
+        rsi_chart = alt.Chart(df.reset_index()).mark_line(color="pink").encode(
             x="Date:T",
-            y="SMA20:Q"
-        )
-
-        st.altair_chart(chart + sma_line, use_container_width=True)
-
-        # --- RSI-graf ---
-        rsi_chart = alt.Chart(df).mark_line(color="purple").encode(
-            x="Date:T",
-            y=alt.Y("RSI:Q", title="RSI")
-        ).properties(
-            width=800,
-            height=200,
-            title="RSI (Relative Strength Index)"
-        )
-
+            y=alt.Y("RSI:Q", title="RSI"),
+            tooltip=["Date:T", "RSI:Q"]
+        ).properties(title="RSI (Relative Strength Index)")
         st.altair_chart(rsi_chart, use_container_width=True)
 
-        # --- Tabell ---
-        st.dataframe(df[["Open", "Close"]].dropna().sort_index(ascending=False).round(2))
-
-        # --- Diskret signatur ---
-        st.markdown("<p style='font-size: 10px; text-align: right; color: grey;'>av Julius</p>", unsafe_allow_html=True)
+        # Skapare
+        st.markdown("<div class='creator'>av Julius</div>", unsafe_allow_html=True)
 
 except Exception as e:
     st.error(f"Något gick fel: {e}")
