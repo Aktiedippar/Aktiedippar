@@ -1,37 +1,10 @@
+
 import streamlit as st
 import yfinance as yf
 import pandas as pd
 import altair as alt
 
-# --- APP KONFIGURATION ---
 st.set_page_config(page_title="Aktier som dippar", page_icon="📉", layout="centered")
-
-# --- ANPASSAD STIL (inspirerad av Avanza) ---
-st.markdown("""
-    <style>
-    body, .stApp {
-        background-color: #f8f9fa;
-        color: #212529;
-        font-family: 'Helvetica', sans-serif;
-    }
-    h1, h2, h3 {
-        color: #0046b8;
-    }
-    .metric-box {
-        background-color: #ffffff;
-        padding: 1rem;
-        border-radius: 8px;
-        box-shadow: 0 2px 5px rgba(0,0,0,0.05);
-        margin-bottom: 1rem;
-    }
-    .footer {
-        text-align: center;
-        color: gray;
-        font-size: 13px;
-        margin-top: 2rem;
-    }
-    </style>
-""", unsafe_allow_html=True)
 
 # --- RSI-BERÄKNING ---
 def compute_rsi(series, period=14):
@@ -70,10 +43,10 @@ stock_names = {
 }
 
 # --- RUBRIK ---
-st.markdown("<h1 style='text-align: center;'>📉 Aktieanalys</h1>", unsafe_allow_html=True)
+st.markdown("<h1 style='text-align: center;'>📉 Aktieanalys 📈</h1>", unsafe_allow_html=True)
 
 # --- ANVÄNDARINPUT ---
-user_input = st.text_input("🔎 Skriv ett företagsnamn eller ticker (t.ex. 'saab', 'tesla', 'AAPL')").strip().lower()
+user_input = st.text_input("Skriv ett företagsnamn eller ticker (t.ex. 'saab', 'tesla', 'AAPL')").strip().lower()
 
 def resolve_ticker(user_input):
     if user_input in stock_names:
@@ -97,44 +70,75 @@ if user_input:
         if df.empty:
             st.error(f"⚠️ Ingen data hittades för {user_input.upper()} ({ticker}).")
         else:
-            # --- METRIKSEKTION ---
-            latest_close = float(df['Close'].iloc[-1]) if 'Close' in df.columns else None
-            latest_rsi = float(df['RSI'].iloc[-1]) if 'RSI' in df.columns else None
-
-            st.markdown("<div class='metric-box'>", unsafe_allow_html=True)
             st.subheader(f"{user_input.capitalize()} ({ticker})")
+
+            # Hämta senaste värden
+            try:
+                latest_close = float(df['Close'].iloc[-1])
+            except Exception:
+                latest_close = None
+
+            try:
+                latest_rsi = float(df['RSI'].iloc[-1])
+            except Exception:
+                latest_rsi = None
+
             if latest_close is not None:
-                st.write(f"💰 Senaste stängningspris: **{latest_close:.2f} SEK**")
+                st.markdown(f"<p>💰 Stängningspris: <b>{latest_close:.2f} SEK</b></p>", unsafe_allow_html=True)
+            else:
+                st.warning("❌ Kunde inte hämta stängningspris.")
+
             if latest_rsi is not None:
-                st.write(f"📊 RSI: **{latest_rsi:.2f}**")
-            st.markdown("</div>", unsafe_allow_html=True)
+                if latest_rsi < 30:
+                    st.success(f"📉 RSI: **{latest_rsi:.2f}** – Översåld (möjligt köpläge)")
+                elif latest_rsi > 70:
+                    st.warning(f"📈 RSI: **{latest_rsi:.2f}** – Överköpt (var försiktig)")
+                else:
+                    st.info(f"📈 RSI: **{latest_rsi:.2f}**")
+            else:
+                st.warning("❌ Kunde inte hämta RSI-värde.")
 
-            # --- GRAF ---
-            st.write("📈 Prisgraf med glidande medelvärden:")
-            chart = alt.Chart(df.reset_index()).mark_line().encode(
-                x='Date:T',
-                y='Close:Q',
-                tooltip=['Date:T', 'Close:Q', 'RSI:Q']
-            ).properties(width=700, height=400)
+            # 📊 Prisgraf med SMA
+            st.write("📊 Prisgraf med glidande medelvärden:")
 
-            sma20_line = alt.Chart(df.reset_index()).mark_line(color='green').encode(
-                x='Date:T',
-                y='SMA20:Q'
+            base = alt.Chart(df.reset_index()).encode(
+                x=alt.X("Date:T", title="Datum")
             )
 
-            sma50_line = alt.Chart(df.reset_index()).mark_line(color='orange').encode(
-                x='Date:T',
-                y='SMA50:Q'
+            price_line = base.mark_line(color="#1f77b4", strokeWidth=2).encode(
+                y=alt.Y("Close:Q", title="Stängningspris"),
+                tooltip=["Date:T", alt.Tooltip("Close:Q", title="Pris (SEK)")]
             )
 
-            st.altair_chart(chart + sma20_line + sma50_line)
+            sma20_line = base.mark_line(color="#ff7f0e", strokeDash=[5, 5]).encode(
+                y="SMA20:Q",
+                tooltip=[alt.Tooltip("SMA20:Q", title="SMA 20")]
+            )
 
-            # --- TABELL ---
+            sma50_line = base.mark_line(color="#2ca02c", strokeDash=[2, 2]).encode(
+                y="SMA50:Q",
+                tooltip=[alt.Tooltip("SMA50:Q", title="SMA 50")]
+            )
+
+            chart = alt.layer(price_line, sma20_line, sma50_line).properties(
+                width=750,
+                height=400,
+                title="Prisgraf med SMA 20 & SMA 50"
+            ).configure_title(
+                fontSize=18,
+                anchor="start",
+                font="Helvetica"
+            ).configure_axis(
+                labelFontSize=12,
+                titleFontSize=14
+            )
+
+            st.altair_chart(chart)
+
+            # Tabell
             st.write("📋 Öppnings- och stängningspriser:")
-            st.dataframe(df[['Open', 'Close']].sort_index(ascending=False).round(2))
+            st.dataframe(df[['Open', 'Close']].dropna().sort_index(ascending=False).round(2))
 
-# --- INFO OM SIGNATUR ---
 else:
     st.info("🔍 Ange ett företagsnamn eller ticker för att se analysen.")
-
-st.markdown("<div class='footer'>© 2025 av Julius</div>", unsafe_allow_html=True)
+    st.markdown("<p style='text-align: center; color: gray; font-size: 13px;'>© 2025 av Julius</p>", unsafe_allow_html=True)
