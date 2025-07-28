@@ -40,7 +40,7 @@ stock_names = {
 }
 
 # --- TITEL ---
-st.title("📉 Aktier som dippar – möjliga köplägen")
+st.title("📉 Aktier som dippar – möjliga köplägen 📈")
 
 # --- ANVÄNDARINPUT ---
 user_input = st.text_input("Skriv ett företagsnamn eller ticker (t.ex. 'saab', 'tesla', 'AAPL')").strip().lower()
