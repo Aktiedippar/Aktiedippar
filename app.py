@@ -1,12 +1,19 @@
-import yfinance as yf
 import streamlit as st
+import yfinance as yf
 import pandas as pd
 
-st.title("📉 Aktier som dippar – Köpläge?")
+# Funktion för att räkna RSI
+def compute_rsi(series, period=14):
+    delta = series.diff()
+    gain = delta.where(delta > 0, 0.0)
+    loss = -delta.where(delta < 0, 0.0)
+    avg_gain = gain.rolling(window=period).mean()
+    avg_loss = loss.rolling(window=period).mean()
+    rs = avg_gain / avg_loss
+    rsi = 100 - (100 / (1 + rs))
+    return rsi
 
-stocks = ['EVO.ST', 'VOLV-B.ST', 'ERIC-B.ST', 'INVE-B.ST']
-rsi_threshold = 30
-
+# Hämtar data för ett bolag
 def get_data(ticker):
     df = yf.download(ticker, period='3mo', auto_adjust=True)
     if df.empty or 'Close' not in df.columns:
@@ -14,20 +21,23 @@ def get_data(ticker):
     df['RSI'] = compute_rsi(df['Close'])
     return df
 
-def compute_rsi(series, period=14):
-    delta = series.diff()
-    gain = delta.clip(lower=0)
-    loss = -delta.clip(upper=0)
-    avg_gain = gain.rolling(window=period).mean()
-    avg_loss = loss.rolling(window=period).mean()
-    rs = avg_gain / avg_loss
-    return 100 - (100 / (1 + rs))
+# Lista på aktier att analysera (lägg till fler om du vill)
+stock_list = ['AAPL', 'MSFT', 'TSLA', 'AMZN', 'GOOGL']
 
-for stock in stocks:
+st.title("📉 Aktier som dippar – möjliga köplägen")
+
+# Analysera varje aktie
+for stock in stock_list:
     df = get_data(stock)
-    if len(df) == 0:
+    if df.empty:
         continue
+
     latest_rsi = df['RSI'].iloc[-1]
-    latest_close = df['Adj Close'].iloc[-1]
-    if latest_rsi < rsi_threshold:
-        st.write(f"📉 {stock} – RSI: {latest_rsi:.2f} – Pris: {latest_close:.2f} kr")
+    latest_close = df['Close'].iloc[-1]
+
+    # Visa bara om RSI är lågt
+    if latest_rsi < 35:
+        st.subheader(f"📊 {stock}")
+        st.write(f"💰 Senaste pris: **{latest_close:.2f} USD**")
+        st.write(f"📉 RSI: **{latest_rsi:.2f}** *(översåld)*")
+        st.line_chart(df['Close'])
