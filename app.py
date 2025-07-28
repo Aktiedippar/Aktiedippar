@@ -38,9 +38,10 @@ for stock in stock_list:
     latest_rsi = df['RSI'].iloc[-1]
     latest_close = df['Close'].iloc[-1]
 
-    # Visa bara om RSI är lågt
-    if latest_rsi < 50:
-        st.subheader(f"📊 {stock}")
-        st.write(f"💰 Senaste pris: **{latest_close:.2f} USD**")
-        st.write(f"📉 RSI: **{latest_rsi:.2f}** *(översåld)*")
-        st.line_chart(df['Close'])
+    st.subheader(f"📊 {stock}")
+st.write(f"💰 Senaste pris: **{latest_close:.2f} USD**")
+if latest_rsi < 50:
+    st.write(f"📉 RSI: **{latest_rsi:.2f}** 🟠 *(Lågt RSI)*")
+else:
+    st.write(f"📈 RSI: **{latest_rsi:.2f}**")
+st.line_chart(df['Close'])
