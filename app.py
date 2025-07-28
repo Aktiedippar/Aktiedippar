@@ -8,10 +8,10 @@ stocks = ['EVO.ST', 'VOLV-B.ST', 'ERIC-B.ST', 'INVE-B.ST']
 rsi_threshold = 30
 
 def get_data(ticker):
-    df = yf.download(ticker, period='3mo')
-    if df.empty or 'Adj Close' not in df.columns:
-        return pd.DataFrame()  # returnera tomt om ingen data
-    df['RSI'] = compute_rsi(df['Adj Close'])
+    df = yf.download(ticker, period='3mo', auto_adjust=True)
+    if df.empty or 'Close' not in df.columns:
+        return pd.DataFrame()
+    df['RSI'] = compute_rsi(df['Close'])
     return df
 
 def compute_rsi(series, period=14):
