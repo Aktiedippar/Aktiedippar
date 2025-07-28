@@ -5,28 +5,6 @@ import altair as alt
 
 st.set_page_config(page_title="Aktier som dippar", page_icon="📉", layout="centered")
 
-# --- CSS för bakgrund och stil ---
-st.markdown(
-    """
-    <style>
-    body {
-        background-color: #0b1d3a;
-        color: white;
-    }
-    .stApp {
-        background-color: #0b1d3a;
-    }
-    .css-18e3th9 {
-        background-color: #0b1d3a;
-    }
-    h1, h2, h3, h4, h5, h6, .stMarkdown {
-        color: white;
-    }
-    </style>
-    """,
-    unsafe_allow_html=True
-)
-
 # --- RSI-BERÄKNING ---
 def compute_rsi(series, period=14):
     delta = series.diff()
@@ -64,7 +42,10 @@ stock_names = {
 }
 
 # --- RUBRIK ---
-st.markdown("<h1 style='text-align: center;'>📉 Aktieanalys</h1>", unsafe_allow_html=True)
+st.markdown(
+    "<h1 style='text-align: center;'>📉 Aktieanalys 📈</h1>",
+    unsafe_allow_html=True
+)
 
 # --- ANVÄNDARINPUT ---
 user_input = st.text_input("Skriv ett företagsnamn eller ticker (t.ex. 'saab', 'tesla', 'AAPL')").strip().lower()
@@ -93,7 +74,7 @@ if user_input:
         else:
             st.subheader(f"{user_input.capitalize()} ({ticker})")
 
-            # Hämta senaste värden
+            # Senaste värden
             try:
                 latest_close = float(df['Close'].iloc[-1])
             except Exception:
@@ -104,50 +85,53 @@ if user_input:
             except Exception:
                 latest_rsi = None
 
-            # Visa stängningspris
             if latest_close is not None:
-                st.markdown(f"<p style='font-size:18px;'>💰 Stängningspris: <b>{latest_close:.2f} SEK</b></p>", unsafe_allow_html=True)
+                st.markdown(f"<p>💰 Stängningspris: <b>{latest_close:.2f} SEK</b></p>", unsafe_allow_html=True)
             else:
                 st.warning("❌ Kunde inte hämta stängningspris.")
 
-            # Visa RSI
             if latest_rsi is not None:
                 if latest_rsi < 30:
-                    st.success(f"📉 RSI: {latest_rsi:.2f} – Översåld (möjligt köpläge)")
+                    st.success(f"📉 RSI: **{latest_rsi:.2f}** – Översåld (möjligt köpläge)")
                 elif latest_rsi > 70:
-                    st.warning(f"📈 RSI: {latest_rsi:.2f} – Överköpt (var försiktig)")
+                    st.warning(f"📈 RSI: **{latest_rsi:.2f}** – Överköpt (var försiktig)")
                 else:
-                    st.write(f"📈 RSI: {latest_rsi:.2f}")
+                    st.write(f"📈 RSI: **{latest_rsi:.2f}**")
             else:
                 st.warning("❌ Kunde inte hämta RSI-värde.")
 
             # --- GRAF ---
-            if df['Close'].dropna().empty:
-                st.warning("⚠️ Ingen stängningsdata att visa i grafen.")
-            else:
-                min_price = df['Close'].min()
-                max_price = df['Close'].max()
+            st.write("📊 Prisgraf:")
 
-                base = alt.Chart(df.reset_index()).encode(
-                    x=alt.X("Date:T", title="Datum"),
-                    y=alt.Y("Close:Q", title="Stängningspris (SEK)", scale=alt.Scale(domain=[min_price*0.95, max_price*1.05])),
-                    tooltip=["Date:T", "Close:Q", "SMA20:Q", "SMA50:Q"]
-                )
+            min_price = df["Close"].min()
+            max_price = df["Close"].max()
 
-                close_line = base.mark_line(color="skyblue", strokeWidth=2).encode(y="Close:Q")
-                sma20_line = base.mark_line(color="orange", strokeDash=[4, 4]).encode(y="SMA20:Q")
-                sma50_line = base.mark_line(color="pink").encode(y="SMA50:Q")
+            base = alt.Chart(df.reset_index()).encode(x='Date:T')
 
-                full_chart = (close_line + sma20_line + sma50_line).properties(width=700, height=400).interactive()
+            close_line = base.mark_line(color='blue').encode(
+                y=alt.Y("Close:Q", title="Stängningspris (SEK)",
+                        scale=alt.Scale(domain=[min_price * 0.95, max_price * 1.05])),
+                tooltip=['Date:T', 'Close:Q']
+            )
 
-                st.altair_chart(full_chart)
+            sma20_line = base.mark_line(color='orange').encode(
+                y='SMA20:Q'
+            )
 
-            # --- TABELL ---
+            sma50_line = base.mark_line(color='green').encode(
+                y='SMA50:Q'
+            )
+
+            chart = (close_line + sma20_line + sma50_line).properties(width=700, height=400).interactive()
+            st.altair_chart(chart)
+
+            # Tabell
+            st.write("📋 Öppnings- och stängningspriser:")
             if 'Open' in df.columns and 'Close' in df.columns:
-                st.write("📋 Öppnings- och stängningspriser:")
-                st.dataframe(df[['Open', 'Close']].sort_index(ascending=False).round(2))
+                st.dataframe(df[['Open', 'Close']].dropna().sort_index(ascending=False).round(2))
             else:
-                st.write("Ingen öppningsdata tillgänglig.")
+                st.warning("Kunde inte visa tabellen – saknar kolumner.")
 
-# --- Signatur längst ner ---
-st.markdown("<p style='text-align: center; color: gray; font-size: 13px;'>© 2025 av Julius</p>", unsafe_allow_html=True)
+else:
+    st.info("🔍 Ange ett företagsnamn eller ticker för att se analysen.")
+    st.markdown("<p style='text-align: center; color: gray; font-size: 13px;'>© 2025 av Julius</p>", unsafe_allow_html=True)
