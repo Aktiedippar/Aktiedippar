@@ -41,7 +41,7 @@ stock_names = {
 
 # --- CENTRERAD RUBRIK ---
 st.markdown(
-    "<h1 style='text-align: center;'>📉 Aktier som dippar – möjliga köplägen</h1>",
+    "<h1 style='text-align: center;'>📉 Aktier som dippar – möjliga köplägen 📈</h1>",
     unsafe_allow_html=True
 )
 
