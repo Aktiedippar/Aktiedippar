@@ -5,6 +5,7 @@ import altair as alt
 
 st.set_page_config(page_title="Aktier som dippar", page_icon="📉", layout="centered")
 
+# --- RSI-BERÄKNING ---
 def compute_rsi(series, period=14):
     delta = series.diff()
     gain = delta.where(delta > 0, 0.0)
@@ -15,6 +16,7 @@ def compute_rsi(series, period=14):
     rsi = 100 - (100 / (1 + rs))
     return rsi
 
+# --- DATAHÄMTNING ---
 def get_data(ticker):
     try:
         df = yf.download(ticker, period='3mo', interval='1d', auto_adjust=False)
@@ -25,6 +27,7 @@ def get_data(ticker):
     except Exception:
         return pd.DataFrame()
 
+# --- NAMN -> TICKER MAPPNING ---
 stock_names = {
     "saab": "SAAB-B.ST",
     "evo": "EVO.ST",
@@ -36,11 +39,13 @@ stock_names = {
     "apple": "AAPL"
 }
 
+# --- RUBRIK ---
 st.markdown(
     "<h1 style='text-align: center;'>📉 Aktieanalys 📈</h1>",
     unsafe_allow_html=True
 )
 
+# --- ANVÄNDARINPUT ---
 user_input = st.text_input("Skriv ett företagsnamn eller ticker (t.ex. 'saab', 'tesla', 'AAPL')").strip().lower()
 
 def resolve_ticker(user_input):
@@ -67,40 +72,49 @@ if user_input:
         else:
             st.subheader(f"{user_input.capitalize()} ({ticker})")
 
-            try:
-                latest_close = float(df['Close'].iloc[-1])
+            # Senaste värden
+            latest_close = df['Close'].iloc[-1] if 'Close' in df.columns else None
+            latest_rsi = df['RSI'].iloc[-1] if 'RSI' in df.columns else None
+
+            if latest_close is not None:
                 st.write(f"💰 Senaste stängningspris: **{latest_close:.2f} SEK**")
-            except:
+            else:
                 st.warning("❌ Kunde inte hämta stängningspris.")
 
-            try:
-                latest_rsi = float(df['RSI'].iloc[-1])
+            if latest_rsi is not None:
                 if latest_rsi < 30:
                     st.success(f"📉 RSI: **{latest_rsi:.2f}** – Översåld (möjligt köpläge)")
                 elif latest_rsi > 70:
                     st.warning(f"📈 RSI: **{latest_rsi:.2f}** – Överköpt (var försiktig)")
                 else:
                     st.write(f"📈 RSI: **{latest_rsi:.2f}**")
-            except:
+            else:
                 st.warning("❌ Kunde inte hämta RSI-värde.")
 
+            # --- PRISGRAF ---
             st.write("📊 Prisgraf:")
-            min_price = df["Close"].min()
-            max_price = df["Close"].max()
 
-            chart = alt.Chart(df.reset_index()).mark_line(color="deepskyblue").encode(
+            min_price = df['Close'].min()
+            max_price = df['Close'].max()
+
+            price_chart = alt.Chart(df.reset_index()).mark_line(color='deepskyblue').encode(
                 x=alt.X("Date:T", title="Datum"),
-                y=alt.Y("Close:Q", title="Stängningspris (SEK)", 
+                y=alt.Y("Close:Q", title="Stängningspris (SEK)",
                         scale=alt.Scale(domain=[min_price * 0.95, max_price * 1.05])),
                 tooltip=['Date:T', 'Close:Q', 'RSI:Q']
             ).properties(
                 width=700,
                 height=400
             ).interactive()
-            st.altair_chart(chart)
 
+            st.altair_chart(price_chart)
+
+            # --- TABELL ---
             st.write("📋 Öppnings- och stängningspriser:")
-            st.dataframe(df[['Open', 'Close']].dropna().sort_index(ascending=False).round(2))
+            if 'Open' in df.columns and 'Close' in df.columns:
+                st.dataframe(df[['Open', 'Close']].dropna().sort_index(ascending=False).round(2))
+            else:
+                st.warning("⚠️ Kunde inte visa tabell eftersom Open eller Close saknas.")
 else:
     st.info("🔍 Ange ett företagsnamn eller ticker för att se analysen.")
     st.markdown("<p style='text-align: center; color: gray; font-size: 13px;'>© 2025 av Julius</p>", unsafe_allow_html=True)
