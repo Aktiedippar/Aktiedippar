@@ -22,8 +22,11 @@ def get_data(ticker):
     return df
 
 # Lista på aktier att analysera (lägg till fler om du vill)
-stock_list = ['AAPL', 'MSFT', 'TSLA', 'AMZN', 'GOOGL']
-
+stock_list = [
+    'AAPL', 'MSFT', 'TSLA', 'AMZN', 'GOOGL',
+    'SAAB-B.ST',      # SAAB B
+    'EVO.ST'          # Evolution AB
+]
 st.title("📉 Aktier som dippar – möjliga köplägen")
 
 # Analysera varje aktie
