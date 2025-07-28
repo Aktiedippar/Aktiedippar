@@ -13,7 +13,7 @@ def compute_rsi(series, period=14):
     rsi = 100 - (100 / (1 + rs))
     return rsi
 
-# Hämtar data för ett bolag
+# Funktion som hämtar data
 def get_data(ticker):
     df = yf.download(ticker, period='6mo', auto_adjust=True)
     if df.empty or 'Close' not in df.columns:
@@ -21,7 +21,7 @@ def get_data(ticker):
     df['RSI'] = compute_rsi(df['Close'])
     return df
 
-# Namn till ticker-mappning
+# Namn → Ticker (lägg till fler vid behov)
 name_to_ticker = {
     'apple': 'AAPL',
     'microsoft': 'MSFT',
@@ -32,18 +32,18 @@ name_to_ticker = {
     'evolution': 'EVO.ST'
 }
 
-# Titel
+# Rubrik
 st.title("📉 Aktier som dippar – möjliga köplägen")
 
-# Användarinmatning
+# Användarens inmatning
 input_names = st.text_input("Ange bolag (t.ex. saab, evolution, tesla):", "saab, evolution")
 
-# Konvertera till tickerlista
+# Översätt till tickers
 input_list = [name.strip().lower() for name in input_names.split(',')]
 stock_list = [name_to_ticker[name] for name in input_list if name in name_to_ticker]
 
 if not stock_list:
-    st.warning("Inga giltiga bolagsnamn hittades. Kontrollera stavning.")
+    st.warning("⚠️ Inga giltiga bolagsnamn hittades. Kontrollera stavningen.")
 else:
     for stock in stock_list:
         df = get_data(stock)
@@ -51,18 +51,27 @@ else:
             st.write(f"⚠️ Ingen data för {stock}.")
             continue
 
-# Kontrollera att vi har giltiga värden
-if not df['Close'].empty and not df['RSI'].isna().all():
-    latest_rsi = df['RSI'].dropna().iloc[-1]
-    latest_close = df['Close'].iloc[-1]
+        # Ta bort rader där RSI eller Close saknas
+        df = df.dropna(subset=['RSI', 'Close'])
 
-    st.subheader(f"📊 {stock}")
-    st.write(f"💰 Senaste pris: **{latest_close:.2f} USD**")
-    if latest_rsi < 50:
-        st.write(f"📉 RSI: **{latest_rsi:.2f}** 🟠 *(Lågt RSI)*")
-    else:
-        st.write(f"📈 RSI: **{latest_rsi:.2f}**")
-    st.line_chart(df['Close'])
-else:
-    st.write(f"⚠️ Otillräcklig data för att visa {stock}.")
-    
+        if df.empty:
+            st.write(f"⚠️ Ingen tillräcklig data för {stock} efter filtrering.")
+            continue
+
+        try:
+            latest_rsi = float(df['RSI'].iloc[-1])
+            latest_close = float(df['Close'].iloc[-1])
+        except Exception:
+            st.write(f"⚠️ Fel vid hämtning av senaste värden för {stock}.")
+            continue
+
+        # Visa analys
+        st.subheader(f"📊 {stock}")
+        st.write(f"💰 Senaste pris: **{latest_close:.2f} USD**")
+
+        if latest_rsi < 50:
+            st.write(f"📉 RSI: **{latest_rsi:.2f}** 🟠 *(Lågt RSI – kan vara köpläge)*")
+        else:
+            st.write(f"📈 RSI: **{latest_rsi:.2f}**")
+
+        st.line_chart(df['Close'])
