@@ -3,9 +3,13 @@ import yfinance as yf
 import pandas as pd
 import plotly.graph_objs as go
 from datetime import datetime
+import time
 
 st.set_page_config(page_title="Aktieanalys", layout="wide")
 st.title("📈 Aktieanalysverktyg")
+
+# Automatisk uppdatering var 30 sek
+st.markdown("<meta http-equiv='refresh' content='30'>", unsafe_allow_html=True)
 
 # Inmatning
 user_input = st.text_input("Sök företagsnamn (t.ex. 'Tesla', 'Saab', 'Evolution'):")
