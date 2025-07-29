@@ -1,11 +1,14 @@
 import streamlit as st
 import yfinance as yf
 import pandas as pd
+from PIL import Image
 import plotly.graph_objs as go
 from datetime import datetime, timedelta
 
 st.set_page_config(page_title="Aktieanalys", layout="wide")
-st.title("📈 Aktieanalysverktyg")
+st.titlewith st.sidebar:
+    image = Image.open("logga.png")
+    st.image(image, use_column_width=True)("📈 Aktieanalysverktyg")
 
 user_input = st.text_input("Sök företagsnamn (t.ex. 'Tesla', 'Saab', 'Evolution'):")
 
