@@ -1,25 +1,14 @@
 import streamlit as st
-from PIL import Image
 import yfinance as yf
 import pandas as pd
 import plotly.graph_objs as go
 from datetime import datetime, timedelta
 
-# Streamlit config
 st.set_page_config(page_title="Aktieanalys", layout="wide")
-
-# Titel i huvudvyn
 st.title("📈 Aktieanalysverktyg")
 
-# Logga i sidomenyn
-with st.sidebar:
-    image = Image.open("logga.png")  # <-- se till att logga.png ligger i samma mapp
-    st.image(image, use_column_width=True)
-
-# Sökfält
 user_input = st.text_input("Sök företagsnamn (t.ex. 'Tesla', 'Saab', 'Evolution'):")
 
-# Karta företagsnamn → ticker
 company_map = {
     "tesla": "TSLA",
     "saab": "SAAB-B.ST",
@@ -28,7 +17,6 @@ company_map = {
     "ericsson": "ERIC-B.ST"
 }
 
-# Om användaren fyllt i något
 if user_input:
     ticker = company_map.get(user_input.lower())
     if ticker:
@@ -46,7 +34,7 @@ if user_input:
             rs = price_change.rolling(14).mean() / price_change.rolling(14).std()
             df["RSI"] = 100 - (100 / (1 + rs))
 
-            # Rensa bort rader som saknar SMA
+            # Kontrollera SMA-kolumner
             sma_cols = ["SMA_20", "SMA_50", "SMA_200"]
             valid_sma_cols = [col for col in sma_cols if col in df.columns and df[col].notna().any()]
             if valid_sma_cols:
@@ -55,7 +43,7 @@ if user_input:
                 except KeyError:
                     pass
 
-            # Hämta senaste pris och datum
+            # Hämta senaste pris och datum, säkert
             try:
                 latest_close = float(df["Close"].dropna().iloc[-1])
             except Exception:
