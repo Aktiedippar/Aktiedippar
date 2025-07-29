@@ -25,6 +25,7 @@ if user_input:
         df = yf.download(ticker, start=start_date, end=end_date)
 
         if not df.empty and "Close" in df.columns:
+            # Beräkna indikatorer
             df["SMA_20"] = df["Close"].rolling(window=20).mean()
             df["SMA_50"] = df["Close"].rolling(window=50).mean()
             df["SMA_200"] = df["Close"].rolling(window=200).mean()
@@ -33,7 +34,7 @@ if user_input:
             rs = price_change.rolling(14).mean() / price_change.rolling(14).std()
             df["RSI"] = 100 - (100 / (1 + rs))
 
-            # Skydda mot KeyError vid dropna
+            # Kontrollera SMA-kolumner
             sma_cols = ["SMA_20", "SMA_50", "SMA_200"]
             valid_sma_cols = [col for col in sma_cols if col in df.columns and df[col].notna().any()]
             if valid_sma_cols:
@@ -42,12 +43,26 @@ if user_input:
                 except KeyError:
                     pass
 
-            latest_close = df["Close"].dropna().iloc[-1]
-            latest_date = df.index[-1].strftime('%Y-%m-%d')
+            # Säkert hämtad senaste stängningspris och datum
+            try:
+                latest_close = float(df["Close"].dropna().iloc[-1])
+            except Exception:
+                latest_close = None
 
-            st.markdown(f"💰 **Senaste stängningspris:** {latest_close:.2f} SEK")
+            try:
+                latest_date = df.index[-1].strftime('%Y-%m-%d')
+            except Exception:
+                latest_date = "Okänt datum"
+
+            # Visa pris och datum
+            if latest_close is not None:
+                st.markdown(f"💰 **Senaste stängningspris:** {latest_close:.2f} SEK")
+            else:
+                st.warning("Kunde inte hämta stängningspris.")
+
             st.markdown(f"📅 **Senaste handelsdag:** {latest_date}")
 
+            # Prisgraf med SMA
             fig = go.Figure()
             fig.add_trace(go.Scatter(x=df.index, y=df["Close"], name="Stängningspris", line=dict(color="black")))
 
@@ -58,6 +73,7 @@ if user_input:
                               height=500, template="plotly_white")
             st.plotly_chart(fig, use_container_width=True)
 
+            # RSI-graf
             if "RSI" in df.columns and df["RSI"].notna().any():
                 fig_rsi = go.Figure()
                 fig_rsi.add_trace(go.Scatter(x=df.index, y=df["RSI"], name="RSI", line=dict(color="green")))
@@ -67,8 +83,10 @@ if user_input:
                                       height=300, template="plotly_white")
                 st.plotly_chart(fig_rsi, use_container_width=True)
 
+            # Tabell
             st.subheader("📊 Prisdata")
             st.dataframe(df[["Open", "Close"]].dropna().tail(30))
+
         else:
             st.error("Ingen data hittades för vald aktie.")
     else:
