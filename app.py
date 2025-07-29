@@ -6,10 +6,9 @@ from datetime import datetime, timedelta
 import numpy as np
 import time
 
-# Streamlit-sidinställningar
 st.set_page_config(page_title="Aktieanalys", layout="wide")
 
-# Logga + rubrik i rad
+# Logga + rubrik
 st.markdown(
     """
     <div style="display: flex; align-items: center;">
@@ -20,7 +19,7 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-# Refresh-timer
+# Automatisk uppdatering var 30:e sekund
 if "last_refresh" not in st.session_state:
     st.session_state.last_refresh = time.time()
 
@@ -28,7 +27,7 @@ if time.time() - st.session_state.last_refresh > 30:
     st.session_state.last_refresh = time.time()
     st.rerun()
 
-# Input-sökning
+# Spara sökning
 if "saved_input" not in st.session_state:
     st.session_state.saved_input = ""
 
@@ -37,6 +36,7 @@ user_input = st.text_input("Sök företagsnamn (t.ex. 'Tesla', 'Saab', 'Evolutio
 if user_input:
     st.session_state.saved_input = user_input
 
+# Namn → Ticker
 company_map = {
     "tesla": "TSLA",
     "saab": "SAAB-B.ST",
@@ -56,10 +56,11 @@ if st.session_state.saved_input:
             st.markdown(f"💰 **Nuvarande pris:** {latest_price:.2f} {currency}")
             st.markdown(f"📅 **Tidpunkt:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
 
-            hist = ticker_obj.history(period="1d", interval="5m")
+            # Hämta daglig historik för 3 månader
+            hist = ticker_obj.history(period="3mo", interval="1d")
 
             if not hist.empty:
-                # Första grafen – senaste pris
+                # Graf 1 – Senaste 3 månaders pris
                 fig = go.Figure()
                 fig.add_trace(go.Scatter(
                     x=hist.index,
@@ -69,8 +70,8 @@ if st.session_state.saved_input:
                 ))
 
                 fig.update_layout(
-                    title="📈 Prisgraf – senaste handelsdagen",
-                    xaxis_title="Tidpunkt",
+                    title="📈 Prisgraf – senaste 3 månader",
+                    xaxis_title="Datum",
                     yaxis_title=f"Pris ({currency})",
                     height=400,
                     template="plotly_white"
@@ -78,32 +79,31 @@ if st.session_state.saved_input:
 
                 st.plotly_chart(fig, use_container_width=True)
 
-                # Andra grafen – framtidsprognos
-                st.markdown("🔮 **Framtidsprognos baserat på trenden**")
+                # Prognos för 3 dagar framåt
+                st.markdown("🔮 **Prognos – Nästa 3 dagar**")
 
-                # En enkel linjär regressionsmodell
-                recent_data = hist["Close"].dropna().tail(36)
+                recent_data = hist["Close"].dropna().tail(60)  # ca 3 mån av handel
                 if len(recent_data) >= 10:
                     y = recent_data.values
                     x = np.arange(len(y))
                     coeffs = np.polyfit(x, y, 1)
-                    future_x = np.arange(len(y), len(y) + 7)
+                    future_x = np.arange(len(y), len(y) + 3)
                     future_y = np.polyval(coeffs, future_x)
 
-                    future_times = [hist.index[-1] + timedelta(minutes=5 * (i + 1)) for i in range(7)]
+                    future_dates = [hist.index[-1] + timedelta(days=i + 1) for i in range(3)]
 
                     fig_forecast = go.Figure()
                     fig_forecast.add_trace(go.Scatter(
-                        x=future_times,
+                        x=future_dates,
                         y=future_y,
                         name="Prognos",
                         line=dict(color="blue", dash="dash")
                     ))
 
                     fig_forecast.update_layout(
-                        title="🔮 Prognos – Nästa 30–40 minuter",
-                        xaxis_title="Tidpunkt",
-                        yaxis_title=f"Pris ({currency})",
+                        title="🔮 Prognos – Nästa 3 dagar",
+                        xaxis_title="Datum",
+                        yaxis_title=f"Prognostiserat pris ({currency})",
                         height=350,
                         template="plotly_white"
                     )
@@ -112,7 +112,7 @@ if st.session_state.saved_input:
                 else:
                     st.info("Inte tillräckligt med data för att göra en prognos.")
             else:
-                st.warning("Ingen intradagsdata hittades för denna aktie.")
+                st.warning("Ingen historisk data hittades.")
         else:
             st.warning("Kunde inte hämta aktuellt pris.")
     else:
