@@ -2,104 +2,89 @@ import streamlit as st
 import pandas as pd
 import yfinance as yf
 import altair as alt
-import numpy as np
 from datetime import datetime, timedelta
 
-# Snyggare layout med marinblå känsla
-st.set_page_config(page_title="Aktiedippar", layout="wide")
-st.markdown(
-    """
-    <style>
-    body {
-        background-color: #001F3F;
-        color: white;
-    }
-    .stApp {
-        background-color: #001F3F;
-    }
-    h1, h2, h3, .stTextInput, .stSelectbox {
-        color: white;
-    }
-    .css-1v0mbdj {
-        color: white !important;
-    }
-    </style>
-    """,
-    unsafe_allow_html=True
-)
+# Appkonfiguration
+st.set_page_config(page_title="Aktiegraf", layout="wide")
 
-st.title("📊 Aktieanalysverktyg")
+# Titel och sökfält
+st.markdown("<h2 style='color:#012D5A;'>📈 Aktieanalys</h2>", unsafe_allow_html=True)
+ticker_input = st.text_input("🔍 Sök efter företag (t.ex. 'Tesla', 'Saab')", "")
 
-# Sökruta
-user_input = st.text_input("Sök företagsnamn eller ticker (t.ex. 'saab' eller 'TSLA')").upper()
-
-# Automatisk konvertering av vanliga namn
-name_to_ticker = {
-    "SAAB": "SAAB-B.ST",
-    "TESLA": "TSLA",
-    "EVO": "EVO.ST",
-    "VOLVO": "VOLV-B.ST",
+# Omvandla användarens input till rätt ticker
+ticker_map = {
+    "tesla": "TSLA",
+    "saab": "SAAB-B.ST",
+    "evolution": "EVO.ST",
+    "volvo": "VOLCAR-B.ST",
+    "ericsson": "ERIC-B.ST"
 }
-ticker = name_to_ticker.get(user_input, user_input)
+ticker = ticker_map.get(ticker_input.lower(), ticker_input.upper())
 
-if ticker:
+# Ladda aktiedata
+@st.cache_data(ttl=3600)
+def load_data(ticker):
+    end = datetime.today()
+    start = end - timedelta(days=90)
     try:
-        end_date = datetime.today()
-        start_date = end_date - timedelta(days=90)
-        df = yf.download(ticker, start=start_date, end=end_date)
+        df = yf.download(ticker, start=start, end=end)
+        df = df[["Open", "Close", "Volume"]]
+        df.dropna(inplace=True)
+        df.index = pd.to_datetime(df.index)
+        return df
+    except Exception:
+        return pd.DataFrame()
 
-        if df.empty:
-            st.error(f"Ingen data hittades för {user_input} ({ticker}).")
-        else:
-            df['SMA20'] = df['Close'].rolling(window=20).mean()
+df = load_data(ticker)
 
-            # RSI
-            delta = df['Close'].diff()
-            gain = delta.where(delta > 0, 0)
-            loss = -delta.where(delta < 0, 0)
-            avg_gain = gain.rolling(window=14).mean()
-            avg_loss = loss.rolling(window=14).mean()
-            rs = avg_gain / avg_loss
-            df['RSI'] = 100 - (100 / (1 + rs))
+if df.empty:
+    st.warning(f"Ingen data hittades för {ticker_input} ({ticker}).")
+else:
+    # Hämta senaste stängningspris
+    latest_close = df["Close"].iloc[-1]
+    st.write(f"💰 Senaste stängningspris: **{latest_close:.2f} SEK**")
 
-            # Snyggare prisvisning
-            latest_close = df['Close'].dropna()
-            if not latest_close.empty:
-                value = float(latest_close.iloc[-1])
-                st.markdown(f"### 💰 Senaste stängningspris: **{value:.2f} SEK**")
-            else:
-                st.warning("Kunde inte hämta stängningspris.")
+    # Lägg till glidande medelvärden
+    df["SMA 20"] = df["Close"].rolling(window=20).mean()
+    df["SMA 50"] = df["Close"].rolling(window=50).mean()
 
-            # Tabell
-            st.dataframe(df[['Open', 'Close']].dropna().sort_index(ascending=False).round(2))
+    # Hämta min/max för Y-axel (för proportionell graf)
+    min_price = float(df["Close"].min())
+    max_price = float(df["Close"].max())
 
-            # Proportionerlig skala
-            min_price = df['Close'].min()
-            max_price = df['Close'].max()
+    # Altair-graf
+    base = alt.Chart(df.reset_index()).encode(
+        x=alt.X("Date:T", title="Datum"),
+        y=alt.Y("Close:Q", title="Stängningspris (SEK)",
+                scale=alt.Scale(domain=[min_price * 0.95, max_price * 1.05]))
+    )
 
-            base = alt.Chart(df.reset_index()).encode(
-                x='Date:T'
-            )
+    close_line = base.mark_line(color="#1f77b4", strokeWidth=2).encode(
+        tooltip=["Date:T", "Close:Q"]
+    )
 
-            close_line = base.mark_line(color='deepskyblue').encode(
-                y=alt.Y('Close:Q', title='Stängningspris (SEK)', scale=alt.Scale(domain=[min_price*0.95, max_price*1.05]))
-            )
+    sma20_line = base.mark_line(color="orange", strokeDash=[4, 2]).encode(
+        y="SMA 20:Q",
+        tooltip=["Date:T", "SMA 20:Q"]
+    )
 
-            sma_line = base.mark_line(color='orange').encode(
-                y='SMA20:Q'
-            )
+    sma50_line = base.mark_line(color="green", strokeDash=[2, 2]).encode(
+        y="SMA 50:Q",
+        tooltip=["Date:T", "SMA 50:Q"]
+    )
 
-            st.altair_chart(close_line + sma_line, use_container_width=True)
+    chart = (close_line + sma20_line + sma50_line).properties(
+        width=1000,
+        height=400,
+        title=""
+    ).configure_axis(
+        grid=False
+    ).configure_view(
+        strokeWidth=0
+    )
 
-            # RSI-graf
-            rsi_chart = alt.Chart(df.reset_index()).mark_line(color='violet').encode(
-                x='Date:T',
-                y=alt.Y('RSI:Q', title='RSI')
-            ).properties(
-                height=200,
-                title="RSI (Relative Strength Index)"
-            )
-            st.altair_chart(rsi_chart, use_container_width=True)
+    st.altair_chart(chart, use_container_width=True)
 
-    except Exception as e:
-        st.error(f"Något gick fel: {e}")
+    # Visa data som tabell
+    st.subheader("📊 Data de senaste 3 månaderna")
+    st.dataframe(df[["Open", "Close", "Volume"]].sort_index(ascending=False).round(2))
