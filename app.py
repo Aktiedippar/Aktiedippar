@@ -24,57 +24,52 @@ if user_input:
         start_date = end_date - timedelta(days=90)
         df = yf.download(ticker, start=start_date, end=end_date)
 
-        if not df.empty:
+        if not df.empty and "Close" in df.columns:
             df["SMA_20"] = df["Close"].rolling(window=20).mean()
             df["SMA_50"] = df["Close"].rolling(window=50).mean()
             df["SMA_200"] = df["Close"].rolling(window=200).mean()
-            df["RSI"] = 100 - (100 / (1 + df["Close"].pct_change().rolling(window=14).mean() /
-                                       df["Close"].pct_change().rolling(window=14).std()))
 
+            price_change = df["Close"].pct_change()
+            rs = price_change.rolling(14).mean() / price_change.rolling(14).std()
+            df["RSI"] = 100 - (100 / (1 + rs))
+
+            # Skydda mot KeyError vid dropna
             sma_cols = ["SMA_20", "SMA_50", "SMA_200"]
-            valid_sma_cols = []
-            for col in sma_cols:
-                if col in df.columns:
-                    try:
-                        if df[col].notna().any():
-                            valid_sma_cols.append(col)
-                    except KeyError:
-                        pass
-
+            valid_sma_cols = [col for col in sma_cols if col in df.columns and df[col].notna().any()]
             if valid_sma_cols:
                 try:
                     df = df.dropna(subset=valid_sma_cols, how="all")
                 except KeyError:
                     pass
 
-            st.markdown(f"💰 **Senaste stängningspris:** {df['Close'][-1]:.2f} SEK")
-            st.markdown(f"📅 **Senaste handelsdag:** {df.index[-1].strftime('%Y-%m-%d')}")
+            latest_close = df["Close"].dropna().iloc[-1]
+            latest_date = df.index[-1].strftime('%Y-%m-%d')
+
+            st.markdown(f"💰 **Senaste stängningspris:** {latest_close:.2f} SEK")
+            st.markdown(f"📅 **Senaste handelsdag:** {latest_date}")
 
             fig = go.Figure()
-            fig.add_trace(go.Scatter(x=df.index, y=df["Close"], mode="lines", name="Stängningspris"))
+            fig.add_trace(go.Scatter(x=df.index, y=df["Close"], name="Stängningspris", line=dict(color="black")))
 
-            if "SMA_20" in df.columns and df["SMA_20"].notna().any():
-                fig.add_trace(go.Scatter(x=df.index, y=df["SMA_20"], mode="lines", name="SMA 20"))
-            if "SMA_50" in df.columns and df["SMA_50"].notna().any():
-                fig.add_trace(go.Scatter(x=df.index, y=df["SMA_50"], mode="lines", name="SMA 50"))
-            if "SMA_200" in df.columns and df["SMA_200"].notna().any():
-                fig.add_trace(go.Scatter(x=df.index, y=df["SMA_200"], mode="lines", name="SMA 200"))
+            for col, color in zip(valid_sma_cols, ["blue", "orange", "purple"]):
+                fig.add_trace(go.Scatter(x=df.index, y=df[col], name=col, line=dict(dash="dot", color=color)))
 
             fig.update_layout(title="Pris & Glidande Medelvärden", xaxis_title="Datum", yaxis_title="Pris",
                               height=500, template="plotly_white")
             st.plotly_chart(fig, use_container_width=True)
 
-            fig_rsi = go.Figure()
-            fig_rsi.add_trace(go.Scatter(x=df.index, y=df["RSI"], mode="lines", name="RSI"))
-            fig_rsi.add_hline(y=70, line_dash="dash", line_color="red")
-            fig_rsi.add_hline(y=30, line_dash="dash", line_color="green")
-            fig_rsi.update_layout(title="RSI (Relative Strength Index)", xaxis_title="Datum", yaxis_title="RSI",
-                                  height=300, template="plotly_white")
-            st.plotly_chart(fig_rsi, use_container_width=True)
+            if "RSI" in df.columns and df["RSI"].notna().any():
+                fig_rsi = go.Figure()
+                fig_rsi.add_trace(go.Scatter(x=df.index, y=df["RSI"], name="RSI", line=dict(color="green")))
+                fig_rsi.add_hline(y=70, line_dash="dash", line_color="red")
+                fig_rsi.add_hline(y=30, line_dash="dash", line_color="blue")
+                fig_rsi.update_layout(title="RSI (Relative Strength Index)", xaxis_title="Datum", yaxis_title="RSI",
+                                      height=300, template="plotly_white")
+                st.plotly_chart(fig_rsi, use_container_width=True)
 
             st.subheader("📊 Prisdata")
-            st.dataframe(df[["Open", "Close"]].tail(30))
+            st.dataframe(df[["Open", "Close"]].dropna().tail(30))
         else:
             st.error("Ingen data hittades för vald aktie.")
     else:
-        st.warning("Företaget känns inte igen.")
+        st.warning("Företagsnamnet känns inte igen.")
