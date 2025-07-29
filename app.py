@@ -32,9 +32,20 @@ if user_input:
                                        df["Close"].pct_change().rolling(window=14).std()))
 
             sma_cols = ["SMA_20", "SMA_50", "SMA_200"]
-            valid_sma_cols = [col for col in sma_cols if col in df.columns and df[col].notna().any()]
+            valid_sma_cols = []
+            for col in sma_cols:
+                if col in df.columns:
+                    try:
+                        if df[col].notna().any():
+                            valid_sma_cols.append(col)
+                    except KeyError:
+                        pass
+
             if valid_sma_cols:
-                df = df.dropna(subset=valid_sma_cols, how="all")
+                try:
+                    df = df.dropna(subset=valid_sma_cols, how="all")
+                except KeyError:
+                    pass
 
             st.markdown(f"💰 **Senaste stängningspris:** {df['Close'][-1]:.2f} SEK")
             st.markdown(f"📅 **Senaste handelsdag:** {df.index[-1].strftime('%Y-%m-%d')}")
@@ -42,11 +53,11 @@ if user_input:
             fig = go.Figure()
             fig.add_trace(go.Scatter(x=df.index, y=df["Close"], mode="lines", name="Stängningspris"))
 
-            if "SMA_20" in df.columns:
+            if "SMA_20" in df.columns and df["SMA_20"].notna().any():
                 fig.add_trace(go.Scatter(x=df.index, y=df["SMA_20"], mode="lines", name="SMA 20"))
-            if "SMA_50" in df.columns:
+            if "SMA_50" in df.columns and df["SMA_50"].notna().any():
                 fig.add_trace(go.Scatter(x=df.index, y=df["SMA_50"], mode="lines", name="SMA 50"))
-            if "SMA_200" in df.columns:
+            if "SMA_200" in df.columns and df["SMA_200"].notna().any():
                 fig.add_trace(go.Scatter(x=df.index, y=df["SMA_200"], mode="lines", name="SMA 200"))
 
             fig.update_layout(title="Pris & Glidande Medelvärden", xaxis_title="Datum", yaxis_title="Pris",
