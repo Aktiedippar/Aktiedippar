@@ -6,9 +6,11 @@ import plotly.graph_objs as go
 from datetime import datetime, timedelta
 
 st.set_page_config(page_title="Aktieanalys", layout="wide")
-st.titlewith st.sidebar:
+st.title("📈 Aktieanalysverktyg")st.title("📈 Aktieanalysverktyg")
+
+with st.sidebar:
     image = Image.open("logga.png")
-    st.image(image, use_column_width=True)("📈 Aktieanalysverktyg")
+    st.image(image, use_column_width=True)
 
 user_input = st.text_input("Sök företagsnamn (t.ex. 'Tesla', 'Saab', 'Evolution'):")
 
