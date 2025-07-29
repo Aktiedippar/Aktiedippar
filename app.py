@@ -26,7 +26,7 @@ if "last_refresh" not in st.session_state:
 # Om mer än 30 sekunder gått → kör om appen
 if time.time() - st.session_state.last_refresh > 30:
     st.session_state.last_refresh = time.time()
-    st.experimental_rerun()
+    st.rerun()
 
 # Initiera sökfältsdata
 if "saved_input" not in st.session_state:
