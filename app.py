@@ -3,12 +3,11 @@ import yfinance as yf
 import pandas as pd
 import plotly.graph_objs as go
 from datetime import datetime, timedelta
-import numpy as np
 import time
+import numpy as np
 
 st.set_page_config(page_title="Aktieanalys", layout="wide")
 
-# Logga + rubrik
 st.markdown(
     """
     <div style="display: flex; align-items: center;">
@@ -19,7 +18,6 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-# Automatisk uppdatering var 30:e sekund
 if "last_refresh" not in st.session_state:
     st.session_state.last_refresh = time.time()
 
@@ -27,7 +25,6 @@ if time.time() - st.session_state.last_refresh > 30:
     st.session_state.last_refresh = time.time()
     st.rerun()
 
-# Spara sökning
 if "saved_input" not in st.session_state:
     st.session_state.saved_input = ""
 
@@ -36,7 +33,6 @@ user_input = st.text_input("Sök företagsnamn (t.ex. 'Tesla', 'Saab', 'Evolutio
 if user_input:
     st.session_state.saved_input = user_input
 
-# Namn → Ticker
 company_map = {
     "tesla": "TSLA",
     "saab": "SAAB-B.ST",
@@ -56,11 +52,9 @@ if st.session_state.saved_input:
             st.markdown(f"💰 **Nuvarande pris:** {latest_price:.2f} {currency}")
             st.markdown(f"📅 **Tidpunkt:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
 
-            # Hämta daglig historik för 3 månader
-            hist = ticker_obj.history(period="3mo", interval="1d")
+            hist = ticker_obj.history(period="1d", interval="5m")
 
             if not hist.empty:
-                # Graf 1 – Senaste 3 månaders pris
                 fig = go.Figure()
                 fig.add_trace(go.Scatter(
                     x=hist.index,
@@ -68,51 +62,59 @@ if st.session_state.saved_input:
                     name="Pris",
                     line=dict(color="green", width=2)
                 ))
-
                 fig.update_layout(
-                    title="📈 Prisgraf – senaste 3 månader",
+                    title="📈 Prisgraf – senaste handelsdagen",
+                    xaxis_title="Tidpunkt",
+                    yaxis_title=f"Pris ({currency})",
+                    height=400,
+                    template="plotly_white",
+                    margin=dict(l=40, r=40, t=40, b=40)
+                )
+                st.plotly_chart(fig, use_container_width=True)
+            else:
+                st.warning("Ingen intradagsdata hittades för denna aktie.")
+
+            # ----- Framtidsprognosgraf (2 veckor) -----
+            forecast_hist = ticker_obj.history(period="6mo", interval="1d")
+
+            if not forecast_hist.empty:
+                forecast_hist = forecast_hist.dropna(subset=["Close"])
+                forecast_hist.reset_index(inplace=True)
+                forecast_hist["Days"] = (forecast_hist["Date"] - forecast_hist["Date"].min()).dt.days
+
+                X = forecast_hist["Days"].values.reshape(-1, 1)
+                y = forecast_hist["Close"].values
+                coef = np.polyfit(forecast_hist["Days"], y, 1)
+                poly1d_fn = np.poly1d(coef)
+
+                future_days = np.arange(forecast_hist["Days"].max() + 1, forecast_hist["Days"].max() + 15)
+                future_dates = [forecast_hist["Date"].max() + timedelta(days=int(i)) for i in range(1, 15)]
+                forecast_values = poly1d_fn(future_days)
+
+                forecast_fig = go.Figure()
+                forecast_fig.add_trace(go.Scatter(
+                    x=forecast_hist["Date"],
+                    y=forecast_hist["Close"],
+                    mode="lines",
+                    name="Historiskt pris",
+                    line=dict(color="gray")
+                ))
+                forecast_fig.add_trace(go.Scatter(
+                    x=future_dates,
+                    y=forecast_values,
+                    mode="lines+markers",
+                    name="Prognos (2 veckor)",
+                    line=dict(color="blue", dash="dash")
+                ))
+
+                forecast_fig.update_layout(
+                    title="🔮 Framtidsprognos – kommande 2 veckor",
                     xaxis_title="Datum",
                     yaxis_title=f"Pris ({currency})",
                     height=400,
                     template="plotly_white"
                 )
-
-                st.plotly_chart(fig, use_container_width=True)
-
-                # Prognos för 3 dagar framåt
-                st.markdown("🔮 **Prognos – Nästa 3 dagar**")
-
-                recent_data = hist["Close"].dropna().tail(60)  # ca 3 mån av handel
-                if len(recent_data) >= 10:
-                    y = recent_data.values
-                    x = np.arange(len(y))
-                    coeffs = np.polyfit(x, y, 1)
-                    future_x = np.arange(len(y), len(y) + 3)
-                    future_y = np.polyval(coeffs, future_x)
-
-                    future_dates = [hist.index[-1] + timedelta(days=i + 1) for i in range(3)]
-
-                    fig_forecast = go.Figure()
-                    fig_forecast.add_trace(go.Scatter(
-                        x=future_dates,
-                        y=future_y,
-                        name="Prognos",
-                        line=dict(color="blue", dash="dash")
-                    ))
-
-                    fig_forecast.update_layout(
-                        title="🔮 Prognos – Nästa 3 dagar",
-                        xaxis_title="Datum",
-                        yaxis_title=f"Prognostiserat pris ({currency})",
-                        height=350,
-                        template="plotly_white"
-                    )
-
-                    st.plotly_chart(fig_forecast, use_container_width=True)
-                else:
-                    st.info("Inte tillräckligt med data för att göra en prognos.")
-            else:
-                st.warning("Ingen historisk data hittades.")
+                st.plotly_chart(forecast_fig, use_container_width=True)
         else:
             st.warning("Kunde inte hämta aktuellt pris.")
     else:
