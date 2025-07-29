@@ -1,91 +1,105 @@
 import streamlit as st
-import yfinance as yf
 import pandas as pd
+import yfinance as yf
 import altair as alt
+import numpy as np
 from datetime import datetime, timedelta
 
-st.set_page_config(page_title="Aktieanalys", layout="wide")
+# Snyggare layout med marinblå känsla
+st.set_page_config(page_title="Aktiedippar", layout="wide")
+st.markdown(
+    """
+    <style>
+    body {
+        background-color: #001F3F;
+        color: white;
+    }
+    .stApp {
+        background-color: #001F3F;
+    }
+    h1, h2, h3, .stTextInput, .stSelectbox {
+        color: white;
+    }
+    .css-1v0mbdj {
+        color: white !important;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True
+)
 
-# Anpassad bakgrundsfärg med mörkblå stil
-page_bg = """
-<style>
-body {
-    background-color: #0e1a2b;
-    color: white;
+st.title("📊 Aktieanalysverktyg")
+
+# Sökruta
+user_input = st.text_input("Sök företagsnamn eller ticker (t.ex. 'saab' eller 'TSLA')").upper()
+
+# Automatisk konvertering av vanliga namn
+name_to_ticker = {
+    "SAAB": "SAAB-B.ST",
+    "TESLA": "TSLA",
+    "EVO": "EVO.ST",
+    "VOLVO": "VOLV-B.ST",
 }
-[data-testid="stHeader"] {
-    background: rgba(0,0,0,0);
-}
-h1 {
-    text-align: center;
-    color: white;
-}
-</style>
-"""
-st.markdown(page_bg, unsafe_allow_html=True)
+ticker = name_to_ticker.get(user_input, user_input)
 
-st.markdown("<h1>📈 Aktieanalys</h1>", unsafe_allow_html=True)
-st.markdown("<p style='text-align:center;'>av Julius</p>", unsafe_allow_html=True)
-
-# Inputruta
-user_input = st.text_input("Sök efter företagsnamn eller ticker (t.ex. 'saab', 'evo', 'TSLA')").strip()
-
-ticker_map = {
-    "saab": "SAAB-B.ST",
-    "evo": "EVO.ST",
-    "volvo": "VOLV-B.ST",
-    "ericsson": "ERIC-B.ST",
-    "tesla": "TSLA",
-    "apple": "AAPL",
-    "google": "GOOGL",
-}
-
-if user_input:
-    ticker_symbol = ticker_map.get(user_input.lower(), user_input.upper())
-
+if ticker:
     try:
         end_date = datetime.today()
         start_date = end_date - timedelta(days=90)
+        df = yf.download(ticker, start=start_date, end=end_date)
 
-        df = yf.download(ticker_symbol, start=start_date, end=end_date)
         if df.empty:
-            st.error(f"Ingen data hittades för {ticker_symbol}.")
+            st.error(f"Ingen data hittades för {user_input} ({ticker}).")
         else:
-            df.reset_index(inplace=True)
-            df['Date'] = pd.to_datetime(df['Date'])
-
-            # Senaste stängningspris
-            latest_close = df['Close'].iloc[-1]  # ✅ FIX: Nu är det ett tal, inte en array
-            st.write(f"💰 Senaste stängningspris: **{latest_close:.2f} SEK**")
-
-            # SMA (20-dagars)
             df['SMA20'] = df['Close'].rolling(window=20).mean()
 
-            # Bestäm proportionell skala
-            min_price = df["Close"].min()
-            max_price = df["Close"].max()
+            # RSI
+            delta = df['Close'].diff()
+            gain = delta.where(delta > 0, 0)
+            loss = -delta.where(delta < 0, 0)
+            avg_gain = gain.rolling(window=14).mean()
+            avg_loss = loss.rolling(window=14).mean()
+            rs = avg_gain / avg_loss
+            df['RSI'] = 100 - (100 / (1 + rs))
 
-            chart = alt.Chart(df).mark_line(color="skyblue").encode(
-                x=alt.X("Date:T", title="Datum"),
-                y=alt.Y("Close:Q", title="Stängningspris (SEK)",
-                        scale=alt.Scale(domain=[min_price * 0.95, max_price * 1.05])),
-                tooltip=["Date:T", "Close:Q"]
-            ).properties(
-                title=f"{ticker_symbol} - Kursutveckling",
-                width=900,
-                height=400
-            ).interactive()
+            # Snyggare prisvisning
+            latest_close = df['Close'].dropna()
+            if not latest_close.empty:
+                value = float(latest_close.iloc[-1])
+                st.markdown(f"### 💰 Senaste stängningspris: **{value:.2f} SEK**")
+            else:
+                st.warning("Kunde inte hämta stängningspris.")
 
-            sma_line = alt.Chart(df).mark_line(color='orange').encode(
-                x="Date:T",
-                y="SMA20:Q"
+            # Tabell
+            st.dataframe(df[['Open', 'Close']].dropna().sort_index(ascending=False).round(2))
+
+            # Proportionerlig skala
+            min_price = df['Close'].min()
+            max_price = df['Close'].max()
+
+            base = alt.Chart(df.reset_index()).encode(
+                x='Date:T'
             )
 
-            st.altair_chart(chart + sma_line, use_container_width=True)
+            close_line = base.mark_line(color='deepskyblue').encode(
+                y=alt.Y('Close:Q', title='Stängningspris (SEK)', scale=alt.Scale(domain=[min_price*0.95, max_price*1.05]))
+            )
 
-            # Visa tabell
-            st.subheader("📊 Tabell: Öppnings- och stängningspriser")
-            st.dataframe(df[['Date', 'Open', 'Close']].dropna().sort_values(by='Date', ascending=False).round(2))
+            sma_line = base.mark_line(color='orange').encode(
+                y='SMA20:Q'
+            )
+
+            st.altair_chart(close_line + sma_line, use_container_width=True)
+
+            # RSI-graf
+            rsi_chart = alt.Chart(df.reset_index()).mark_line(color='violet').encode(
+                x='Date:T',
+                y=alt.Y('RSI:Q', title='RSI')
+            ).properties(
+                height=200,
+                title="RSI (Relative Strength Index)"
+            )
+            st.altair_chart(rsi_chart, use_container_width=True)
 
     except Exception as e:
         st.error(f"Något gick fel: {e}")
