@@ -3,28 +3,11 @@ import yfinance as yf
 import pandas as pd
 import plotly.graph_objs as go
 from datetime import datetime, timedelta
-from PIL import Image
 
-# Konfiguration
 st.set_page_config(page_title="Aktieanalys", layout="wide")
 st.title("📈 Aktieanalysverktyg")
 
-# Sidomeny: logga och Avanza-knapp
-with st.sidebar:
-    try:
-        image = Image.open("logga.png")
-        st.image(image, use_container_width=True)
-    except FileNotFoundError:
-        st.warning("Logotypen hittades inte (logga.png saknas).")
-
-    st.markdown("""
-    <a href="https://www.avanza.se/" target="_blank">
-        <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/b/b0/Avanza_logo.svg/2560px-Avanza_logo.svg.png"
-             style="width:100%; max-width:150px; margin-top:10px;" alt="Avanza">
-    </a>
-    """, unsafe_allow_html=True)
-
-# Användarens sökfält
+# Inmatning
 user_input = st.text_input("Sök företagsnamn (t.ex. 'Tesla', 'Saab', 'Evolution'):")
 
 # Namn till ticker
@@ -39,73 +22,40 @@ company_map = {
 if user_input:
     ticker = company_map.get(user_input.lower())
     if ticker:
-        end_date = datetime.today()
-        start_date = end_date - timedelta(days=90)
-        df = yf.download(ticker, start=start_date, end=end_date)
+        ticker_obj = yf.Ticker(ticker)
+        latest_price = ticker_obj.info.get("regularMarketPrice")
 
-        if not df.empty and "Close" in df.columns:
-            # Indikatorer
-            df["SMA_20"] = df["Close"].rolling(window=20).mean()
-            df["SMA_50"] = df["Close"].rolling(window=50).mean()
-            df["SMA_200"] = df["Close"].rolling(window=200).mean()
+        if latest_price is not None:
+            # Visa pris i stor text + datum
+            st.markdown(f"💰 **Nuvarande pris:** {latest_price:.2f} SEK")
+            st.markdown(f"📅 **Tidpunkt:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
 
-            price_change = df["Close"].pct_change()
-            rs = price_change.rolling(14).mean() / price_change.rolling(14).std()
-            df["RSI"] = 100 - (100 / (1 + rs))
+            # Bygg temporär DataFrame (för graf)
+            live_df = pd.DataFrame({
+                "Tid": [datetime.now()],
+                "Pris": [latest_price]
+            })
 
-            # Ta bort rader utan SMA
-            sma_cols = ["SMA_20", "SMA_50", "SMA_200"]
-            valid_sma_cols = [col for col in sma_cols if col in df.columns and df[col].notna().any()]
-            if valid_sma_cols:
-                try:
-                    df = df.dropna(subset=valid_sma_cols, how="all")
-                except KeyError:
-                    pass
-
-            # Senaste pris och datum
-            try:
-                latest_close = float(df["Close"].dropna().iloc[-1])
-            except Exception:
-                latest_close = None
-
-            try:
-                latest_date = df.index[-1].strftime('%Y-%m-%d')
-            except Exception:
-                latest_date = "Okänt datum"
-
-            if latest_close is not None:
-                st.markdown(f"💰 **Senaste stängningspris:** {latest_close:.2f} SEK")
-            else:
-                st.warning("Kunde inte hämta stängningspris.")
-
-            st.markdown(f"📅 **Senaste handelsdag:** {latest_date}")
-
-            # Prisgraf
+            # Rita enkel graf med senaste pris
             fig = go.Figure()
-            fig.add_trace(go.Scatter(x=df.index, y=df["Close"], name="Stängningspris", line=dict(color="black")))
+            fig.add_trace(go.Scatter(
+                x=live_df["Tid"],
+                y=live_df["Pris"],
+                name="Nuvarande pris",
+                line=dict(color="green", width=3)
+            ))
 
-            for col, color in zip(valid_sma_cols, ["blue", "orange", "purple"]):
-                fig.add_trace(go.Scatter(x=df.index, y=df[col], name=col, line=dict(dash="dot", color=color)))
+            fig.update_layout(
+                title="📈 Nuvarande prisgraf",
+                xaxis_title="Tidpunkt",
+                yaxis_title="Pris (SEK)",
+                height=400,
+                template="plotly_white",
+                margin=dict(l=40, r=40, t=40, b=40)
+            )
 
-            fig.update_layout(title="Pris & Glidande Medelvärden", xaxis_title="Datum", yaxis_title="Pris",
-                              height=500, template="plotly_white")
             st.plotly_chart(fig, use_container_width=True)
-
-            # RSI-graf
-            if "RSI" in df.columns and df["RSI"].notna().any():
-                fig_rsi = go.Figure()
-                fig_rsi.add_trace(go.Scatter(x=df.index, y=df["RSI"], name="RSI", line=dict(color="green")))
-                fig_rsi.add_hline(y=70, line_dash="dash", line_color="red")
-                fig_rsi.add_hline(y=30, line_dash="dash", line_color="blue")
-                fig_rsi.update_layout(title="RSI (Relative Strength Index)", xaxis_title="Datum", yaxis_title="RSI",
-                                      height=300, template="plotly_white")
-                st.plotly_chart(fig_rsi, use_container_width=True)
-
-            # Prisdata-tabell
-            st.subheader("📊 Prisdata")
-            st.dataframe(df[["Open", "Close"]].dropna().tail(30))
-
         else:
-            st.error("Ingen data hittades för vald aktie.")
+            st.warning("Kunde inte hämta aktuellt pris just nu.")
     else:
         st.warning("Företagsnamnet känns inte igen.")
