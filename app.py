@@ -1,19 +1,25 @@
 import streamlit as st
+from PIL import Image
 import yfinance as yf
 import pandas as pd
-from PIL import Image
 import plotly.graph_objs as go
 from datetime import datetime, timedelta
 
+# Streamlit config
 st.set_page_config(page_title="Aktieanalys", layout="wide")
-st.title("📈 Aktieanalysverktyg")st.title("📈 Aktieanalysverktyg")
 
+# Titel i huvudvyn
+st.title("📈 Aktieanalysverktyg")
+
+# Logga i sidomenyn
 with st.sidebar:
-    image = Image.open("logga.png")
+    image = Image.open("logga.png")  # <-- se till att logga.png ligger i samma mapp
     st.image(image, use_column_width=True)
 
+# Sökfält
 user_input = st.text_input("Sök företagsnamn (t.ex. 'Tesla', 'Saab', 'Evolution'):")
 
+# Karta företagsnamn → ticker
 company_map = {
     "tesla": "TSLA",
     "saab": "SAAB-B.ST",
@@ -22,6 +28,7 @@ company_map = {
     "ericsson": "ERIC-B.ST"
 }
 
+# Om användaren fyllt i något
 if user_input:
     ticker = company_map.get(user_input.lower())
     if ticker:
@@ -39,7 +46,7 @@ if user_input:
             rs = price_change.rolling(14).mean() / price_change.rolling(14).std()
             df["RSI"] = 100 - (100 / (1 + rs))
 
-            # Kontrollera SMA-kolumner
+            # Rensa bort rader som saknar SMA
             sma_cols = ["SMA_20", "SMA_50", "SMA_200"]
             valid_sma_cols = [col for col in sma_cols if col in df.columns and df[col].notna().any()]
             if valid_sma_cols:
@@ -48,7 +55,7 @@ if user_input:
                 except KeyError:
                     pass
 
-            # Säkert hämtad senaste stängningspris och datum
+            # Hämta senaste pris och datum
             try:
                 latest_close = float(df["Close"].dropna().iloc[-1])
             except Exception:
@@ -59,7 +66,6 @@ if user_input:
             except Exception:
                 latest_date = "Okänt datum"
 
-            # Visa pris och datum
             if latest_close is not None:
                 st.markdown(f"💰 **Senaste stängningspris:** {latest_close:.2f} SEK")
             else:
@@ -67,7 +73,7 @@ if user_input:
 
             st.markdown(f"📅 **Senaste handelsdag:** {latest_date}")
 
-            # Prisgraf med SMA
+            # Prisgraf
             fig = go.Figure()
             fig.add_trace(go.Scatter(x=df.index, y=df["Close"], name="Stängningspris", line=dict(color="black")))
 
@@ -88,7 +94,7 @@ if user_input:
                                       height=300, template="plotly_white")
                 st.plotly_chart(fig_rsi, use_container_width=True)
 
-            # Tabell
+            # Visa tabell
             st.subheader("📊 Prisdata")
             st.dataframe(df[["Open", "Close"]].dropna().tail(30))
 
