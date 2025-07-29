@@ -2,56 +2,56 @@ import streamlit as st
 import yfinance as yf
 import pandas as pd
 import plotly.graph_objs as go
-from datetime import datetime
-from streamlit_autorefresh import st_autorefresh
+from datetime import datetime, timedelta
+import time
+import base64
 
-REFRESH_INTERVAL = 30  # sekunder
+# ====== KONFIGURATION ======
+REFRESH_INTERVAL = 30
 st.set_page_config(page_title="Aktieanalys", layout="wide")
 
-# Titel med logga
-st.markdown(
-    """
-    <div style="display: flex; align-items: center;">
-        <img src="https://raw.githubusercontent.com/Aktiedippar/Aktiedippar/main/logga.png" width="50" style="margin-right:15px;">
-        <h1 style="margin:0; font-size:2.2em;">📈 Aktieanalysverktyg</h1>
-    </div>
-    """, unsafe_allow_html=True
-)
+# ====== LJUDFUNKTION ======
+def play_sound(filename):
+    try:
+        with open(filename, "rb") as f:
+            data = f.read()
+            b64 = base64.b64encode(data).decode()
+            return f'<audio autoplay><source src="data:audio/mp3;base64,{b64}" type="audio/mp3"></audio>'
+    except FileNotFoundError:
+        return ""
 
-# Autorefresh var 30:e sekund
-count = st_autorefresh(interval=REFRESH_INTERVAL * 1000, key="auto_refresh")
+# ====== TIMER ======
+def countdown_timer(seconds):
+    placeholder = st.empty()
+    for remaining in range(seconds, 0, -1):
+        minutes, sec = divmod(remaining, 60)
+        placeholder.markdown(f"""
+        <div style='font-size:28px; text-align:center;'>
+            ⏳ Uppdatering om<br>
+            <span style='font-size:48px; color:#2E8B57;'>{minutes:02}:{sec:02}</span>
+        </div>
+        """, unsafe_allow_html=True)
+        time.sleep(1)
+    st.markdown(play_sound("ping.mp3"), unsafe_allow_html=True)
 
-# Nedräkning: JavaScript-timer + ljud vid 00:00
+# ====== RUBRIK MED LOGGA ======
 st.markdown("""
-<div id="countdown" style="font-size:1.5em; font-weight:bold; padding:10px;"></div>
-<audio id="alertSound" src="https://actions.google.com/sounds/v1/alarms/beep_short.ogg" preload="auto"></audio>
-<script>
-let seconds = %d;
-function tick(){
-    let mins = Math.floor(seconds/60);
-    let secs = seconds%%60;
-    document.getElementById("countdown").innerText = "🔄 Nästa uppdatering om: "+String(mins).padStart(2,'0')+":"+String(secs).padStart(2,'0');
-    if(seconds === 0){
-        document.getElementById("alertSound").play();
-        seconds = %d;
-    } else {
-        seconds--;
-    }
-}
-setInterval(tick, 1000);
-tick();
-</script>
-""" % (REFRESH_INTERVAL, REFRESH_INTERVAL), unsafe_allow_html=True)
+<div style="display:flex;align-items:center;">
+ <img src="https://raw.githubusercontent.com/Aktiedippar/Aktiedippar/main/logga.png" width="50" style="margin-right:15px;">
+ <h1 style="margin:0;font-size:2.2em;">📈 Aktieanalysverktyg</h1>
+</div>
+""", unsafe_allow_html=True)
 
-# Session state för sökning
-if "saved_input" not in st.session_state:
-    st.session_state.saved_input = ""
-user_input = st.text_input("Sök företagsnamn (t.ex. 'Tesla', 'Saab', 'Evolution'):",
-                           value=st.session_state.saved_input)
-if user_input:
-    st.session_state.saved_input = user_input
+# ====== AVANZA-KNAPP ======
+st.markdown("""
+<a href="https://www.avanza.se" target="_blank">
+    <img src="https://www.avanza.se/_next/static/media/avanza-logo.42e48852.svg" width="140">
+</a>
+""", unsafe_allow_html=True)
 
-# Namn → ticker
+# ====== SÖKFÄLT ======
+user_input = st.text_input("Sök företagsnamn (t.ex. 'Tesla', 'Saab', 'Evolution'):")
+
 company_map = {
     "tesla": "TSLA",
     "saab": "SAAB-B.ST",
@@ -60,30 +60,36 @@ company_map = {
     "ericsson": "ERIC-B.ST"
 }
 
-if st.session_state.saved_input:
-    ticker = company_map.get(st.session_state.saved_input.lower())
+# ====== HÄMTA DATA ======
+if user_input:
+    ticker = company_map.get(user_input.lower())
     if ticker:
-        ticker_obj = yf.Ticker(ticker)
-        latest_price = ticker_obj.info.get("regularMarketPrice")
-        currency = ticker_obj.info.get("currency", "SEK")
-        if latest_price is not None:
+        end_date = datetime.now()
+        start_date = end_date - timedelta(days=1)
+        df = yf.download(ticker, start=start_date, end=end_date, interval="1m")
+
+        if not df.empty and "Close" in df.columns:
+            try:
+                latest_price = float(df["Close"].dropna().iloc[-1])
+                latest_time = df.index[-1].strftime('%Y-%m-%d %H:%M')
+            except:
+                latest_price, latest_time = None, "Okänt"
+
+            currency = "USD" if not ticker.endswith(".ST") else "SEK"
             st.markdown(f"💰 **Nuvarande pris:** {latest_price:.2f} {currency}")
-            st.markdown(f"📅 **Tidpunkt:** {datetime.now().strftime('%Y‑%m‑%d %H:%M:%S')}")
-            hist = ticker_obj.history(period="1d", interval="5m")
-            if not hist.empty:
-                fig = go.Figure()
-                fig.add_trace(go.Scatter(
-                    x=hist.index,
-                    y=hist["Close"],
-                    name="Pris", line=dict(color="green", width=2)))
-                fig.update_layout(
-                    title="📈 Prisgraf – senaste handelsdagen",
-                    xaxis_title="Tidpunkt", yaxis_title=f"Pris ({currency})",
-                    height=400, template="plotly_white", margin=dict(l=40,r=40,t=40,b=40))
-                st.plotly_chart(fig, use_container_width=True)
-            else:
-                st.warning("Ingen intradagsdata hittades.")
+            st.markdown(f"🕒 **Senast uppdaterad:** {latest_time}")
+
+            # ====== PRISGRAF ======
+            fig = go.Figure()
+            fig.add_trace(go.Scatter(x=df.index, y=df["Close"], mode="lines", name="Pris", line=dict(color="green")))
+            fig.update_layout(title="Live-pris", xaxis_title="Tid", yaxis_title=f"Pris ({currency})",
+                              height=400, template="plotly_white")
+            st.plotly_chart(fig, use_container_width=True)
         else:
-            st.warning("Kunde inte hämta aktuellt pris.")
+            st.error("Kunde inte hämta prisdata.")
     else:
         st.warning("Företagsnamnet känns inte igen.")
+
+# ====== TIMER + RERUN ======
+countdown_timer(REFRESH_INTERVAL)
+st.experimental_rerun()
