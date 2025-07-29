@@ -3,22 +3,31 @@ import yfinance as yf
 import pandas as pd
 import plotly.graph_objs as go
 from datetime import datetime, timedelta
-from PIL import Image  # <-- för loggan
+from PIL import Image
 
+# Konfiguration
 st.set_page_config(page_title="Aktieanalys", layout="wide")
+st.title("📈 Aktieanalysverktyg")
 
-# Visa loggan i sidomenyn
+# Sidomeny: logga och Avanza-knapp
 with st.sidebar:
     try:
         image = Image.open("logga.png")
-        st.image(image, use_column_width=True)
+        st.image(image, use_container_width=True)
     except FileNotFoundError:
         st.warning("Logotypen hittades inte (logga.png saknas).")
 
-st.title("📈 Aktieanalysverktyg")
+    st.markdown("""
+    <a href="https://www.avanza.se/" target="_blank">
+        <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/b/b0/Avanza_logo.svg/2560px-Avanza_logo.svg.png"
+             style="width:100%; max-width:150px; margin-top:10px;" alt="Avanza">
+    </a>
+    """, unsafe_allow_html=True)
 
+# Användarens sökfält
 user_input = st.text_input("Sök företagsnamn (t.ex. 'Tesla', 'Saab', 'Evolution'):")
 
+# Namn till ticker
 company_map = {
     "tesla": "TSLA",
     "saab": "SAAB-B.ST",
@@ -35,6 +44,7 @@ if user_input:
         df = yf.download(ticker, start=start_date, end=end_date)
 
         if not df.empty and "Close" in df.columns:
+            # Indikatorer
             df["SMA_20"] = df["Close"].rolling(window=20).mean()
             df["SMA_50"] = df["Close"].rolling(window=50).mean()
             df["SMA_200"] = df["Close"].rolling(window=200).mean()
@@ -43,6 +53,7 @@ if user_input:
             rs = price_change.rolling(14).mean() / price_change.rolling(14).std()
             df["RSI"] = 100 - (100 / (1 + rs))
 
+            # Ta bort rader utan SMA
             sma_cols = ["SMA_20", "SMA_50", "SMA_200"]
             valid_sma_cols = [col for col in sma_cols if col in df.columns and df[col].notna().any()]
             if valid_sma_cols:
@@ -51,6 +62,7 @@ if user_input:
                 except KeyError:
                     pass
 
+            # Senaste pris och datum
             try:
                 latest_close = float(df["Close"].dropna().iloc[-1])
             except Exception:
@@ -68,6 +80,7 @@ if user_input:
 
             st.markdown(f"📅 **Senaste handelsdag:** {latest_date}")
 
+            # Prisgraf
             fig = go.Figure()
             fig.add_trace(go.Scatter(x=df.index, y=df["Close"], name="Stängningspris", line=dict(color="black")))
 
@@ -78,6 +91,7 @@ if user_input:
                               height=500, template="plotly_white")
             st.plotly_chart(fig, use_container_width=True)
 
+            # RSI-graf
             if "RSI" in df.columns and df["RSI"].notna().any():
                 fig_rsi = go.Figure()
                 fig_rsi.add_trace(go.Scatter(x=df.index, y=df["RSI"], name="RSI", line=dict(color="green")))
@@ -87,6 +101,7 @@ if user_input:
                                       height=300, template="plotly_white")
                 st.plotly_chart(fig_rsi, use_container_width=True)
 
+            # Prisdata-tabell
             st.subheader("📊 Prisdata")
             st.dataframe(df[["Open", "Close"]].dropna().tail(30))
 
