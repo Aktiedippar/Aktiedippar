@@ -10,6 +10,12 @@ st.set_page_config(page_title="Aktiegraf", layout="wide")
 # Titel och sökfält
 st.markdown("<h2 style='color:#012D5A;'>📈 Aktieanalys</h2>", unsafe_allow_html=True)
 ticker_input = st.text_input("🔍 Sök efter företag (t.ex. 'Tesla', 'Saab')", "")
+st.caption("Exempel: Tesla, Saab, Evolution, Volvo, Ericsson")
+
+# Kontroll: tomt input
+if ticker_input.strip() == "":
+    st.info("Skriv ett företagsnamn för att börja.")
+    st.stop()
 
 # Omvandla användarens input till rätt ticker
 ticker_map = {
@@ -17,7 +23,10 @@ ticker_map = {
     "saab": "SAAB-B.ST",
     "evolution": "EVO.ST",
     "volvo": "VOLCAR-B.ST",
-    "ericsson": "ERIC-B.ST"
+    "ericsson": "ERIC-B.ST",
+    "apple": "AAPL",
+    "microsoft": "MSFT",
+    "google": "GOOGL"
 }
 ticker = ticker_map.get(ticker_input.lower(), ticker_input.upper())
 
@@ -38,53 +47,56 @@ def load_data(ticker):
 df = load_data(ticker)
 
 if df.empty:
-    st.warning(f"Ingen data hittades för {ticker_input} ({ticker}).")
-else:
-    # Hämta senaste stängningspris
-    latest_close = df["Close"].iloc[-1]
-    st.write(f"💰 Senaste stängningspris: **{latest_close:.2f} SEK**")
+    st.warning(f"Ingen data hittades för '{ticker_input}' ({ticker}). Kontrollera att företagsnamnet är korrekt.")
+    st.stop()
 
-    # Lägg till glidande medelvärden
-    df["SMA 20"] = df["Close"].rolling(window=20).mean()
-    df["SMA 50"] = df["Close"].rolling(window=50).mean()
+# Senaste stängningspris
+latest_close = df["Close"].iloc[-1]
+st.write(f"💰 Senaste stängningspris: **{latest_close:.2f} SEK**")
 
-    # Hämta min/max för Y-axel (för proportionell graf)
-    min_price = float(df["Close"].min())
-    max_price = float(df["Close"].max())
+# Glidande medelvärden
+df["SMA 20"] = df["Close"].rolling(window=20).mean()
+df["SMA 50"] = df["Close"].rolling(window=50).mean()
 
-    # Altair-graf
-    base = alt.Chart(df.reset_index()).encode(
-        x=alt.X("Date:T", title="Datum"),
-        y=alt.Y("Close:Q", title="Stängningspris (SEK)",
-                scale=alt.Scale(domain=[min_price * 0.95, max_price * 1.05]))
-    )
+# Rensa bort rader där båda SMA är NaN (för att undvika grafbugg)
+df = df.dropna(subset=["SMA 20", "SMA 50"], how="all")
 
-    close_line = base.mark_line(color="#1f77b4", strokeWidth=2).encode(
-        tooltip=["Date:T", "Close:Q"]
-    )
+# Hämta min/max för Y-axel (för proportionell graf)
+min_price = float(df["Close"].min())
+max_price = float(df["Close"].max())
 
-    sma20_line = base.mark_line(color="orange", strokeDash=[4, 2]).encode(
-        y="SMA 20:Q",
-        tooltip=["Date:T", "SMA 20:Q"]
-    )
+# Altair-graf
+base = alt.Chart(df.reset_index()).encode(
+    x=alt.X("Date:T", title="Datum"),
+    y=alt.Y("Close:Q", title="Stängningspris (SEK)",
+            scale=alt.Scale(domain=[min_price * 0.95, max_price * 1.05]))
+)
 
-    sma50_line = base.mark_line(color="green", strokeDash=[2, 2]).encode(
-        y="SMA 50:Q",
-        tooltip=["Date:T", "SMA 50:Q"]
-    )
+close_line = base.mark_line(color="#1f77b4", strokeWidth=2).encode(
+    tooltip=["Date:T", "Close:Q"]
+)
 
-    chart = (close_line + sma20_line + sma50_line).properties(
-        width=1000,
-        height=400,
-        title=""
-    ).configure_axis(
-        grid=False
-    ).configure_view(
-        strokeWidth=0
-    )
+sma20_line = base.mark_line(color="orange", strokeDash=[4, 2]).encode(
+    y="SMA 20:Q",
+    tooltip=["Date:T", "SMA 20:Q"]
+)
 
-    st.altair_chart(chart, use_container_width=True)
+sma50_line = base.mark_line(color="green", strokeDash=[2, 2]).encode(
+    y="SMA 50:Q",
+    tooltip=["Date:T", "SMA 50:Q"]
+)
 
-    # Visa data som tabell
-    st.subheader("📊 Data de senaste 3 månaderna")
-    st.dataframe(df[["Open", "Close", "Volume"]].sort_index(ascending=False).round(2))
+chart = (close_line + sma20_line + sma50_line).properties(
+    width=1000,
+    height=400
+).configure_axis(
+    grid=False
+).configure_view(
+    strokeWidth=0
+)
+
+st.altair_chart(chart, use_container_width=True)
+
+# Visa data som tabell
+st.subheader("📊 Data de senaste 3 månaderna")
+st.dataframe(df[["Open", "Close", "Volume"]].sort_index(ascending=False).round(2))
