@@ -5,10 +5,11 @@ import plotly.graph_objs as go
 from datetime import datetime
 import time
 
-# Streamlit-sidinställningar
+# === Inställningar ===
 st.set_page_config(page_title="Aktieanalys", layout="wide")
+REFRESH_INTERVAL = 30  # sekunder
 
-# Logga + rubrik i rad
+# === Titel med logga ===
 st.markdown(
     """
     <div style="display: flex; align-items: center;">
@@ -19,36 +20,31 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-# Initiera uppdaterings-timer
-REFRESH_INTERVAL = 30
-
+# === Initiera session state ===
+if "saved_input" not in st.session_state:
+    st.session_state.saved_input = ""
 if "last_refresh" not in st.session_state:
     st.session_state.last_refresh = time.time()
 
-# Nedräkning
-seconds_since_last = time.time() - st.session_state.last_refresh
-seconds_left = REFRESH_INTERVAL - int(seconds_since_last)
-if seconds_left < 0:
-    seconds_left = 0
+# === Nedräkning och automatisk uppdatering ===
+seconds_left = REFRESH_INTERVAL
+countdown_placeholder = st.empty()
 
-st.markdown(f"🔄 Uppdatering om: **{seconds_left} sekunder**")
+for remaining in range(seconds_left, 0, -1):
+    countdown_placeholder.markdown(f"🔄 Uppdatering om: **{remaining} sekunder**")
+    time.sleep(1)
 
-# Om 30 sekunder passerat – uppdatera sidan
-if seconds_since_last > REFRESH_INTERVAL:
-    st.session_state.last_refresh = time.time()
-    st.rerun()
+# === Tvinga omstart efter nedräkning ===
+st.session_state.last_refresh = time.time()
+st.rerun()
 
-# Spara senaste användarinmatning
-if "saved_input" not in st.session_state:
-    st.session_state.saved_input = ""
-
-# Sökfält
+# === Sökfält ===
 user_input = st.text_input("Sök företagsnamn (t.ex. 'Tesla', 'Saab', 'Evolution'):", value=st.session_state.saved_input)
 
 if user_input:
     st.session_state.saved_input = user_input
 
-# Namn till ticker
+# === Namn till ticker ===
 company_map = {
     "tesla": "TSLA",
     "saab": "SAAB-B.ST",
@@ -57,12 +53,13 @@ company_map = {
     "ericsson": "ERIC-B.ST"
 }
 
+# === Hämta aktiedata ===
 if st.session_state.saved_input:
     ticker = company_map.get(st.session_state.saved_input.lower())
     if ticker:
         ticker_obj = yf.Ticker(ticker)
 
-        # Nuvarande pris och valuta
+        # Aktuellt pris + valuta
         latest_price = ticker_obj.info.get("regularMarketPrice")
         currency = ticker_obj.info.get("currency", "SEK")
 
@@ -70,9 +67,8 @@ if st.session_state.saved_input:
             st.markdown(f"💰 **Nuvarande pris:** {latest_price:.2f} {currency}")
             st.markdown(f"📅 **Tidpunkt:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
 
-            # Intradagsdata
+            # Prisgraf: intradagsdata
             hist = ticker_obj.history(period="1d", interval="5m")
-
             if not hist.empty:
                 fig = go.Figure()
                 fig.add_trace(go.Scatter(
