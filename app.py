@@ -50,9 +50,18 @@ if df.empty:
     st.warning(f"Ingen data hittades för '{ticker_input}' ({ticker}). Kontrollera att företagsnamnet är korrekt.")
     st.stop()
 
+# Kontroll: finns Close-data?
+if "Close" not in df.columns or df["Close"].empty:
+    st.warning("Ingen stängningsdata tillgänglig för vald aktie.")
+    st.stop()
+
 # Senaste stängningspris
-latest_close = df["Close"].iloc[-1]
-st.write(f"💰 Senaste stängningspris: **{latest_close:.2f} SEK**")
+try:
+    latest_close = df["Close"].iloc[-1]
+    st.write(f"💰 Senaste stängningspris: **{latest_close:.2f} SEK**")
+except Exception:
+    st.warning("Kunde inte hämta stängningspris för denna aktie.")
+    st.stop()
 
 # Glidande medelvärden
 df["SMA 20"] = df["Close"].rolling(window=20).mean()
