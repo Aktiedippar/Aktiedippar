@@ -75,10 +75,14 @@ except Exception as e:
 df["SMA 20"] = df["Close"].rolling(window=20).mean()
 df["SMA 50"] = df["Close"].rolling(window=50).mean()
 
-# Rensa bort rader där båda SMA är NaN (för att undvika grafbugg)
-df = df.dropna(subset=["SMA 20", "SMA 50"], how="all")
+# Rensa bort rader där båda SMA är NaN (om de finns)
+sma_cols = [col for col in ["SMA 20", "SMA 50"] if col in df.columns]
+if sma_cols:
+    df = df.dropna(subset=sma_cols, how="all")
+else:
+    st.warning("Inga glidande medelvärden kunde beräknas – för lite data.")
 
-# Hämta min/max för Y-axel (för proportionell graf)
+# Hämta min/max för Y-axel
 min_price = float(df["Close"].min())
 max_price = float(df["Close"].max())
 
@@ -93,17 +97,21 @@ close_line = base.mark_line(color="#1f77b4", strokeWidth=2).encode(
     tooltip=["Date:T", "Close:Q"]
 )
 
-sma20_line = base.mark_line(color="orange", strokeDash=[4, 2]).encode(
-    y="SMA 20:Q",
-    tooltip=["Date:T", "SMA 20:Q"]
-)
+chart = close_line
 
-sma50_line = base.mark_line(color="green", strokeDash=[2, 2]).encode(
-    y="SMA 50:Q",
-    tooltip=["Date:T", "SMA 50:Q"]
-)
+if "SMA 20" in df.columns:
+    chart += base.mark_line(color="orange", strokeDash=[4, 2]).encode(
+        y="SMA 20:Q",
+        tooltip=["Date:T", "SMA 20:Q"]
+    )
 
-chart = (close_line + sma20_line + sma50_line).properties(
+if "SMA 50" in df.columns:
+    chart += base.mark_line(color="green", strokeDash=[2, 2]).encode(
+        y="SMA 50:Q",
+        tooltip=["Date:T", "SMA 50:Q"]
+    )
+
+chart = chart.properties(
     width=1000,
     height=400
 ).configure_axis(
